@@ -1,0 +1,20 @@
+[package]
+name = "rolecall"
+version = "0.1.0"
+authors = ["Eleanor McMurtry <elmcmurtry1@gmail.com>"]
+edition = "2018"
+license = "MIT"
+
+[dependencies]
+tokio = { version = "0.2", features = ["full"] }
+tokio-postgres = "0.5.4"
+futures = "0.3.5"
+argonautica = "0.2.0"
+rocket = "0.4.5"
+rocket_contrib = { version = "0.4.5", default-features = false, features = ["json"] }
+serde = { version = "1.0.111", features = ["derive"] }
+dotenv = "0.15.0"
+
+[dev-dependencies]
+reqwest = { version = "0.10.6", features = ["json"] }
+serial_test = "0.4.0"
