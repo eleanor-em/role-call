@@ -1,0 +1,75 @@
+.App {
+    text-align: center;
+    background-color: #0f111a;
+    min-height: 99vh;
+    color: #e2cca4;
+    border: solid 0.3em #090b10;
+}
+
+.AppHeader {
+    display: flex;
+    flex: 10;
+    flex-direction: column;
+    align-items: row;
+    justify-content: center;
+    border-bottom: solid 0.3em #090b10;
+}
+
+.Content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    padding: 1em;
+}
+
+.Title {
+    font-size: 28pt;
+    padding-left: 1em;
+    font-weight: bold;
+    display: flex;
+    text-align: left;
+    justify-content: left;
+}
+
+.Greeting {
+    padding-right: 0.5em;
+    display: flex;
+    flex-direction: row;
+    text-align: right;
+    justify-content: right;
+}
+
+.FormRow {
+    margin-bottom: 0.5em;
+}
+
+input[type=text], [type=password] {
+    padding-left: 0.5em;
+    background-color: inherit;
+    color: inherit;
+    font-size: 10pt;
+    border: none;
+    border-bottom: 1px solid #8f723d;
+}
+
+input[type=text]:focus, [type=password]:focus {
+    border-bottom: 1px solid #deab4e;
+}
+
+label {
+    display: inline-block;
+    width: 8em;
+    text-align: left;
+}
+
+span.SelectedTab {
+    text-decoration: underline;
+}
+
+span.UnselectedTab {
+    cursor: pointer;
+}
+
+span.UnselectedTab:hover {
+    color: #8f723d;
+}

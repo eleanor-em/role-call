@@ -5,8 +5,10 @@ use std::env;
 use argonautica::{Hasher, Verifier};
 use std::fmt::{Formatter, Display, Write};
 use std::time::SystemTime;
+use rand::Rng;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Game {
     token: String,
     name: String,
@@ -87,6 +89,12 @@ impl DbManager {
         Ok((token, timestamp + std::time::Duration::from_secs(delta).as_millis() as Timestamp))
     }
 
+    fn create_user_tag() -> String {
+        let mut rng = rand::thread_rng();
+        let tag = rng.gen_range(0, 10000);
+        format!("{:04}", tag)
+    }
+
     fn create_game_token() -> Result<String, DbError> {
         let bytes = argonautica::utils::generate_random_bytes(12)?;
         let mut s = String::new();
@@ -109,10 +117,13 @@ impl DbManager {
         future::try_join3(
             self.client.execute("
                 CREATE TABLE IF NOT EXISTS user_accounts(
-                    id      serial PRIMARY KEY,
-                    email   text UNIQUE NOT NULL,
-                    token   text NOT NULL,
-                    timeout bigint NOT NULL
+                    id          serial PRIMARY KEY,
+                    email       text UNIQUE NOT NULL,
+                    token       text NOT NULL,
+                    nickname    text NOT NULL,
+                    tag         text NOT NULL,
+                    CONSTRAINT unique_user_name UNIQUE(nickname, tag),
+                    timeout     bigint NOT NULL
                 );", &[]),
             self.client.execute("
                 CREATE TABLE IF NOT EXISTS identities(
@@ -124,10 +135,11 @@ impl DbManager {
                 );", &[]),
             self.client.execute("
                 CREATE TABLE IF NOT EXISTS unconfirmed_identities(
-                    id      serial PRIMARY KEY,
-                    email   text UNIQUE NOT NULL,
-                    pw_hash text NOT NULL,
-                    token   text NOT NULL
+                    id          serial PRIMARY KEY,
+                    email       text UNIQUE NOT NULL,
+                    pw_hash     text NOT NULL,
+                    nickname    text NOT NULL,
+                    token       text NOT NULL
                 );", &[])
         ).await?;
 
@@ -144,7 +156,6 @@ impl DbManager {
                 CREATE TABLE IF NOT EXISTS user_games(
                     user_id integer NOT NULL,
                     game_id integer NOT NULL,
-                    nick    text NOT NULL,
                     PRIMARY KEY (user_id, game_id),
                     FOREIGN KEY (user_id) REFERENCES user_accounts(id)   ON DELETE CASCADE,
                     FOREIGN KEY (game_id) REFERENCES games(id)           ON DELETE CASCADE
@@ -161,16 +172,16 @@ impl DbManager {
 
         // for debug, create test users
         if env::var("ROLECALL_MODE").unwrap_or("release".to_string()) == "debug" {
-            let token = self.create_user("admin", "password").await.unwrap();
+            let token = self.create_user("admin", "password", "admin").await.unwrap();
             self.confirm_user("admin", &token).await.unwrap();
-            let token = self.create_user("player", "password").await.unwrap();
+            let token = self.create_user("player", "password", "player").await.unwrap();
             self.confirm_user("player", &token).await.unwrap();
         }
 
         Ok(())
     }
 
-    pub async fn create_user(&self, email: &str, password: &str) -> Result<String, DbError> {
+    pub async fn create_user(&self, email: &str, password: &str, nickname: &str) -> Result<String, DbError> {
         let (token, _) = Self::create_user_token()?;
         let mut hasher = Hasher::default();
         let pw_hash = hasher
@@ -180,44 +191,45 @@ impl DbManager {
 
         // Create new unconfirmed user
         let statement = "
-            INSERT INTO unconfirmed_identities(email, pw_hash, token)
-            VALUES($1, $2, $3);";
-        self.client.execute(statement, &[&email, &pw_hash, &token]).await?;
+            INSERT INTO unconfirmed_identities(email, pw_hash, token, nickname)
+            VALUES($1, $2, $3, $4);";
+        self.client.execute(statement, &[&email, &pw_hash, &token, &nickname]).await?;
         println!("DB: created new unverified user: {}", email);
 
         Ok(token)
     }
 
-    async fn remove_unconfirmed(&self, email: &str, token: &str) -> Result<String, DbError> {
+    async fn remove_unconfirmed(&self, email: &str, token: &str) -> Result<(String, String), DbError> {
         let statement = "
             DELETE FROM unconfirmed_identities
             WHERE email=$1 AND token=$2
-            RETURNING pw_hash;";
+            RETURNING pw_hash, nickname;";
         let rows = self.client.query(statement, &[&email, &token]).await?;
         if rows.len() > 0 {
-            Ok(rows.get(0).ok_or(DbError::Auth)?.get(0))
+            let row = rows.get(0).ok_or(DbError::Auth)?;
+            Ok((row.get(0), row.get(1)))
         } else {
             Err(DbError::Auth)
         }
     }
 
     pub async fn confirm_user(&self, email: &str, token: &str) -> Result<String, DbError> {
-        let pw_hash = self.remove_unconfirmed(email, token).await?;
+        let (pw_hash, nickname) = self.remove_unconfirmed(email, token).await?;
+        let tag = Self::create_user_tag();
 
         let (token, timeout) = Self::create_user_token()?;
         let statement = "
-            INSERT INTO user_accounts(email, token, timeout)
-            VALUES ($1, $2, $3)
+            INSERT INTO user_accounts(email, token, timeout, nickname, tag)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING (id);";
-        let row = self.client.query_one(statement, &[&email, &token, &timeout])
+        let row = self.client.query_one(statement, &[&email, &token, &timeout, &nickname, &tag])
             .await?;
         let user_id: i32 = row.get(0);
 
         let statement = "
             INSERT INTO identities(email, pw_hash, user_id)
             VALUES($1, $2, $3);";
-        self.client.execute(statement,
-                            &[&email, &pw_hash, &user_id]).await?;
+        self.client.execute(statement, &[&email, &pw_hash, &user_id]).await?;
         println!("DB: verified user id #{}: {}", user_id, email);
         Ok(token)
     }
@@ -238,7 +250,7 @@ impl DbManager {
         }
     }
 
-    pub async fn auth_user(&self, email: &str, password: &str) -> Result<String, DbError> {
+    pub async fn auth_user(&self, email: &str, password: &str) -> Result<(String, String), DbError> {
         let (user_id, pw_hash) = self.get_identities(email).await?;
         let mut verifier = Verifier::default();
         if verifier.with_hash(pw_hash)
@@ -251,18 +263,22 @@ impl DbManager {
             let statement = "
                 UPDATE user_accounts
                 SET token=$2, timeout=$3
-                WHERE id=$1;";
-            self.client.execute(statement, &[&user_id, &token, &timeout]).await?;
-
-            Ok(token)
+                WHERE id=$1
+                RETURNING nickname, tag;";
+            let rows = self.client.query(statement, &[&user_id, &token, &timeout]).await?;
+            let row = rows.get(0).ok_or(DbError::Auth)?;
+            let nickname: String = row.get(0);
+            let tag: String = row.get(1);
+            let username = format!("{}#{}", nickname, tag);
+            Ok((token, username))
         } else {
             Err(DbError::Auth)
         }
     }
 
-    async fn get_account(&self, token: &str) -> Result<UserId, DbError> {
+    async fn get_account(&self, token: &str) -> Result<(UserId, String), DbError> {
         let statement = "
-            SELECT id, timeout
+            SELECT id, timeout, nickname, tag
             FROM user_accounts
             WHERE token=$1;";
         let rows = self.client.query(statement, &[&token]).await?;
@@ -270,8 +286,11 @@ impl DbManager {
             let record = rows.get(0).ok_or(DbError::Auth)?;
             let user_id: UserId = record.get(0);
             let timeout: Timestamp = record.get(1);
+            let nickname: String = record.get(2);
+            let tag: String = record.get(3);
+            let username = format!("{}#{}", nickname, tag);
             if Self::timestamp()? < timeout {
-                Ok(user_id)
+                Ok((user_id, username))
             } else {
                 Err(DbError::Auth)
             }
@@ -281,7 +300,7 @@ impl DbManager {
     }
 
     pub async fn create_game(&self, user_token: &str, name: &str) -> Result<String, DbError> {
-        let user_id = self.get_account(user_token).await?;
+        let (user_id, username) = self.get_account(user_token).await?;
         let game_token = Self::create_game_token()?;
 
         let statement = "
@@ -289,7 +308,7 @@ impl DbManager {
             VALUES ($1, $2, $3);";
         self.client.execute(statement, &[&user_id, &game_token, &name]).await?;
 
-        println!("DB: created game {} ({}) for user #{}", game_token, name, user_id);
+        println!("DB: created game {} ({}) for user #{} ({})", game_token, name, user_id, username);
         Ok(game_token)
     }
 
@@ -307,19 +326,19 @@ impl DbManager {
         }
     }
 
-    pub async fn join_game(&self, user_token: &str, game_token: &str, nick: &str) -> Result<(), DbError> {
-        let user_id = self.get_account(user_token).await?;
+    pub async fn join_game(&self, user_token: &str, game_token: &str) -> Result<(), DbError> {
+        let (user_id, username) = self.get_account(user_token).await?;
         let game_id = self.get_game(game_token).await?;
         let statement = "
-            INSERT INTO user_games(user_id, game_id, nick)
-            VALUES ($1, $2, $3)";
-        self.client.execute(statement, &[&user_id, &game_id, &nick]).await?;
-        println!("DB: user #{} ({}) joined games {}", user_id, nick, game_token);
+            INSERT INTO user_games(user_id, game_id)
+            VALUES ($1, $2)";
+        self.client.execute(statement, &[&user_id, &game_id]).await?;
+        println!("DB: user #{} ({}) joined game {}", user_id, username, game_token);
         Ok(())
     }
 
     pub async fn get_hosted_games(&self, user_token: &str) -> Result<Vec<Game>, DbError> {
-        let user_id = self.get_account(user_token).await?;
+        let (user_id, _) = self.get_account(user_token).await?;
         let statement = "
             SELECT token, name
             FROM games
@@ -333,7 +352,7 @@ impl DbManager {
     }
 
     pub async fn get_joined_games(&self, user_token: &str) -> Result<Vec<Game>, DbError> {
-        let user_id = self.get_account(user_token).await?;
+        let (user_id, _) = self.get_account(user_token).await?;
         let statement = "
             SELECT games.token, games.name
             FROM games
@@ -349,12 +368,12 @@ impl DbManager {
     }
 
     pub async fn create_asset(&self, user_token: &str, name: &str, data: &[u8]) -> Result<(), DbError> {
-        let user_id = self.get_account(user_token).await?;
+        let (user_id, username) = self.get_account(user_token).await?;
         let statement = "
             INSERT INTO assets (owner, name, data)
             VALUES ($1, $2, $3);";
         self.client.execute(statement, &[&user_id, &name, &data]).await?;
-        println!("DB: added asset \"{}\" to user #{}", name, user_id);
+        println!("DB: added asset \"{}\" to user #{} ({})", name, user_id, username);
         Ok(())
     }
 }
@@ -363,6 +382,11 @@ impl DbManager {
 mod tests {
     use crate::db::{DbManager, Game};
     use serial_test::serial;
+
+    async fn new_test_user(db: &DbManager, name: &str) -> String {
+        let token = db.create_user(name, "password", name).await.unwrap();
+        db.confirm_user(name, &token).await.unwrap()
+    }
 
     #[tokio::test]
     #[serial]
@@ -375,17 +399,11 @@ mod tests {
 
         // Create and verify a user
         let email = "auth_user";
-        let token = db.create_user(email, "password").await.unwrap();
-        db.confirm_user(email, &token).await.unwrap();
+        new_test_user(&db, email).await;
 
         // Check authentication passes when it should and fails when it should
         assert!(db.auth_user(email, "password").await.is_ok());
         assert!(db.auth_user(email, "not-password").await.is_err());
-    }
-
-    async fn new_user(db: &DbManager, email: &str) -> String {
-        let token = db.create_user(email, "password").await.unwrap();
-        db.confirm_user(email, &token).await.unwrap()
     }
 
     #[tokio::test]
@@ -398,12 +416,12 @@ mod tests {
         db.create_tables().await.unwrap();
 
         // Create a host and a games
-        let host_token = new_user(&db, "test_host").await;
+        let host_token = new_test_user(&db, "test_host").await;
         let game_token = db.create_game(&host_token, "game").await.unwrap();
 
         // Create a non-host user and join the games
-        let player_token = new_user(&db, "test_player").await;
-        db.join_game(&player_token, &game_token, "nickname").await.unwrap();
+        let player_token = new_test_user(&db, "test_player").await;
+        db.join_game(&player_token, &game_token).await.unwrap();
 
         // Check hosted games
         let hosted = db.get_hosted_games(&host_token).await.unwrap();

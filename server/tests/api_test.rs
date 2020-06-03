@@ -6,14 +6,20 @@ mod tests {
     use std::collections::HashMap;
     use std::thread;
 
+    async fn new_test_user(db: &DbManager, name: &str) -> String {
+        let token = db.create_user(name, "password", name).await.unwrap();
+        db.confirm_user(name, &token).await.unwrap()
+    }
+
     #[tokio::test]
     async fn test_user_api() {
+        // TODO: refactor repeated test code; check that username is returned on successful user auth
         dotenv::dotenv().unwrap();
         let db = DbManager::new().await.unwrap();
         db.clear_tables().await.unwrap();
         db.create_tables().await.unwrap();
         let db = Arc::new(db);
-        let api = Api::new(db.clone());
+        let api = Api::new(db.clone()).unwrap();
         thread::spawn(move || api.start());
 
         // Post a new user
@@ -22,6 +28,7 @@ mod tests {
         let mut user_map = HashMap::new();
         user_map.insert("email", email);
         user_map.insert("password", pw);
+        user_map.insert("nickname", email);
 
         let client = reqwest::Client::new();
         let res: rolecall::api::UserResponse = client.post("http://localhost:8000/api/users")
@@ -37,13 +44,13 @@ mod tests {
         // Create a test user
         let email = "test@email.com";
         let pw = "password";
-        let token = db.create_user(email, pw).await.unwrap();
-        db.confirm_user(email, &token).await.unwrap();
 
         // Attempt to authenticate
+        new_test_user(&db, email).await;
         let mut user_map = HashMap::new();
         user_map.insert("email", email);
         user_map.insert("password", pw);
+        user_map.insert("nickname", email);
         let res: rolecall::api::UserResponse = client.post("http://localhost:8000/api/users/auth")
             .json(&user_map)
             .send()
@@ -57,8 +64,6 @@ mod tests {
 
         // Try with incorrect password
         let pw = "not-password";
-        let mut user_map = HashMap::new();
-        user_map.insert("email", email);
         user_map.insert("password", pw);
         let res: rolecall::api::UserResponse = client.post("http://localhost:8000/api/users/auth")
             .json(&user_map)
@@ -72,9 +77,7 @@ mod tests {
 
         // Try with incorrect email
         let email = "not-email@email.com";
-        let mut user_map = HashMap::new();
         user_map.insert("email", email);
-        user_map.insert("password", pw);
         let res: rolecall::api::UserResponse = client.post("http://localhost:8000/api/users/auth")
             .json(&user_map)
             .send()
@@ -101,7 +104,6 @@ mod tests {
         let game_token = res.token.unwrap();
 
         // Log in as player
-        let mut user_map = HashMap::new();
         user_map.insert("email", "player");
         user_map.insert("password", "password");
         let res: rolecall::api::UserResponse = client.post("http://localhost:8000/api/users/auth")
@@ -117,7 +119,7 @@ mod tests {
         req_map.insert("token", player_token);
         req_map.insert("nick", "nickname".to_string());
         let addr = format!("http://localhost:8000/api/games/{}/join", game_token);
-        let res: rolecall::api::JoinResponse = client.post(&addr)
+        let res: rolecall::api::Response = client.post(&addr)
             .json(&req_map)
             .send()
             .await.unwrap()

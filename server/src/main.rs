@@ -11,7 +11,7 @@ async fn main() {
     dotenv().unwrap();
 
     let db = create_db().await.unwrap();
-    let api = Api::new(db.clone());
+    let api = Api::new(db.clone()).unwrap();
     api.start();
 }
 

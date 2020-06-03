@@ -1,181 +1,286 @@
-use rocket::{State, Response};
-use rocket::http::Status;
+use rocket::State;
+use rocket::response::Content;
+use rocket::http::{ContentType, Cookies};
 use rocket_contrib::json::Json;
-use serde::Deserialize;
+use rocket_contrib::serve::StaticFiles;
+use serde::{Serialize, Deserialize};
 use futures::executor;
 
-use std::io::Cursor;
 use std::sync::Arc;
 
-use crate::db::{DbManager, DbError};
-use rocket::response::Responder;
+use crate::db::{DbManager, DbError, Game};
+use std::error::Error;
 
 pub struct Api {
     db: Arc<DbManager>,
+    index: String,
+    game: String,
 }
 
 impl Api {
-    pub fn new(db: Arc<DbManager>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<DbManager>) -> Result<Self, Box<dyn Error>> {
+        let index = process_html(std::fs::read_to_string("../client/index.html")?);
+        let game = process_html(std::fs::read_to_string("../client/game.html")?);
+
+        Ok(Self { db, index, game })
     }
 
     pub fn start(self) {
-        rocket::ignite().mount("/api/",
+        rocket::ignite().mount("/",
                                routes![index,
+                                    game,
                                     new_user,
                                     auth_user,
                                     new_game,
-                                    join_game])
+                                    join_game,
+                                    hosted_games,
+                                    joined_games])
+            .mount("/dist", StaticFiles::from("../client/dist"))
+            .mount("/react", StaticFiles::from("../client/node_modules/react/umd/"))
+            .mount("/react-dom", StaticFiles::from("../client/node_modules/react-dom/umd/"))
             .manage(self)
             .launch();
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Request {
     token: String,
 }
 
-#[derive(Deserialize)]
-struct UserRequest {
+#[derive(Serialize, Deserialize)]
+struct UserCreateRequest {
     email: String,
-    password: String
+    password: String,
+    nickname: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Serialize, Deserialize)]
+struct UserAuthRequest {
+    email: String,
+    password: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct GameCreateRequest {
+    user_token: String,
+    name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UserResponse {
     pub status: bool,
     pub msg: Option<String>,
     pub token: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct GameRequest {
-    token: String,
-    name: String,
+    pub username: Option<String>,
 }
 
 pub type GameResponse = UserResponse;
 
-#[derive(Deserialize)]
-struct JoinRequest {
-    token: String,
-    nick: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct JoinResponse {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Response {
     pub status: bool,
     pub msg: Option<String>,
 }
 
-#[get("/")]
-fn index() -> &'static str {
-    "Hello, world!"
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListGamesResponse {
+    pub status: bool,
+    pub msg: Option<String>,
+    pub games: Option<Vec<Game>>,
 }
 
-#[post("/users", format = "json", data = "<user>")]
-fn new_user(state: State<'_, Api>, user: Json<UserRequest>) -> impl Responder<'_> {
-    let result = executor::block_on(state.db.create_user(&user.email, &user.password));
+#[post("/api/users", format = "json", data = "<user>")]
+fn new_user(state: State<'_, Api>, user: Json<UserCreateRequest>) -> Json<UserResponse> {
+    let result = executor::block_on(state.db.create_user(&user.email, &user.password, &user.nickname));
 
-    let mut response = Response::new();
-    response.set_status(Status::Ok);
     match result {
         Ok(_) => {
-            response.set_sized_body(Cursor::new("{\"status\":true}"));
+            Json(UserResponse {
+                status: true,
+                msg: None,
+                token: None,
+                username: None
+            })
         },
         Err(_) => {
-            response.set_sized_body(Cursor::new("{\"status\":false,\"msg\":\"miscellaneous error\"}"));
+            Json(UserResponse {
+                status: true,
+                msg: Some("miscellaneous error".to_string()),
+                token: None,
+                username: None
+            })
         }
     }
-    response
 }
 
-#[post("/users/auth", format = "json", data = "<user>")]
-fn auth_user(state: State<'_, Api>, user: Json<UserRequest>) -> impl Responder<'_> {
+#[post("/api/users/auth", format = "json", data = "<user>")]
+fn auth_user(state: State<'_, Api>, user: Json<UserAuthRequest>) -> Json<UserResponse> {
     let result = executor::block_on(state.db.auth_user(&user.email, &user.password));
 
-    let mut response = Response::new();
-    response.set_status(Status::Ok);
-
     match result {
-        Ok(token) => {
-            response.set_sized_body(Cursor::new(format!("{{\"status\":true,\"token\":\"{}\"}}", token)));
+        Ok((token, username)) => {
+            Json(UserResponse {
+                status: true,
+                msg: None,
+                token: Some(token),
+                username: Some(username)
+            })
         },
         Err(DbError::Auth) => {
-            response.set_sized_body(Cursor::new("{\"status\":false,\"msg\":\"user not found\"}"));
+            Json(UserResponse {
+                status: false,
+                msg: Some("user not found".to_string()),
+                token: None,
+                username: None
+            })
         }
         Err(e) => {
             eprintln!("ERROR: {}", e);
-            response.set_sized_body(Cursor::new("{\"status\":false,\"msg\":\"miscellaneous error\"}"));
+            Json(UserResponse {
+                status: false,
+                msg: Some("miscellaneous error".to_string()),
+                token: None,
+                username: None
+            })
         }
     }
-    response
 }
 
-#[post("/games", format = "json", data = "<game>")]
-fn new_game(state: State<'_, Api>, game: Json<GameRequest>) -> impl Responder<'_> {
-    let result = executor::block_on(state.db.create_game(&game.token, &game.name));
-
-    let mut response = Response::new();
-    response.set_status(Status::Ok);
+#[post("/api/games", format = "json", data = "<game>")]
+fn new_game(state: State<'_, Api>, game: Json<GameCreateRequest>) -> Json<GameResponse> {
+    let result = executor::block_on(state.db.create_game(&game.user_token, &game.name));
 
     match result {
-        Ok(token) => {
-            response.set_sized_body(Cursor::new(format!("{{\"status\":true,\"token\":\"{}\"}}", token)));
+        Ok(token) => {;
+            Json(GameResponse {
+                status: true,
+                msg: None,
+                token: Some(token),
+                username: None
+            })
         },
         Err(DbError::Auth) => {
-            response.set_sized_body(Cursor::new("{\"status\":false,\"msg\":\"user not found\"}"));
+            Json(GameResponse {
+                status: false,
+                msg: Some("user not found".to_string()),
+                token: None,
+                username: None
+            })
         }
         Err(e) => {
             eprintln!("ERROR: {}", e);
-            response.set_sized_body(Cursor::new("{\"status\":false,\"msg\":\"miscellaneous error\"}"));
+            Json(GameResponse {
+                status: false,
+                msg: Some("miscellaneous error".to_string()),
+                token: None,
+                username: None
+            })
         }
     }
-    response
 }
 
-#[post("/games/hosted", format = "json", data = "<req>")]
-fn hosted_games(state: State<'_, Api>, req: Json<Request>) -> impl Responder<'_> {
+#[post("/api/games/hosted", format = "json", data = "<req>")]
+fn hosted_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResponse>{
     let result = executor::block_on(state.db.get_hosted_games(&req.token));
-
-    let mut response = Response::new();
-    response.set_status(Status::Ok);
 
     match result {
         Ok(games) => {
-            // TODO: fix below formatting
-            response.set_sized_body(Cursor::new(format!("{{\"status\":true}}")));
+            Json(ListGamesResponse {
+                status: true,
+                msg: None,
+                games: Some(games)
+            })
         },
         Err(DbError::Auth) => {
-            response.set_sized_body(Cursor::new("{\"status\":false,\"msg\":\"user not found\"}"));
+            Json(ListGamesResponse {
+                status: false,
+                msg: Some("user not found".to_string()),
+                games: None
+            })
         }
         Err(e) => {
             eprintln!("ERROR: {}", e);
-            response.set_sized_body(Cursor::new("{\"status\":false,\"msg\":\"miscellaneous error\"}"));
+            Json(ListGamesResponse {
+                status: false,
+                msg: Some("miscellaneous error".to_string()),
+                games: None
+            })
         }
     }
-    response
 }
 
-#[post("/games/<game_token>/join", format = "json", data = "<req>")]
-fn join_game(state: State<'_, Api>, game_token: String, req: Json<JoinRequest>) -> impl Responder<'_> {
-    let result = executor::block_on(state.db.join_game(&req.token, &game_token, &req.nick));
+#[post("/api/games/joined", format = "json", data = "<req>")]
+fn joined_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResponse>{
+    let result = executor::block_on(state.db.get_joined_games(&req.token));
 
-    let mut response = Response::new();
-    response.set_status(Status::Ok);
+    match result {
+        Ok(games) => {
+            Json(ListGamesResponse {
+                status: true,
+                msg: None,
+                games: Some(games)
+            })
+        },
+        Err(DbError::Auth) => {
+            Json(ListGamesResponse {
+                status: false,
+                msg: Some("user not found".to_string()),
+                games: None
+            })
+        }
+        Err(e) => {
+            eprintln!("ERROR: {}", e);
+            Json(ListGamesResponse {
+                status: false,
+                msg: Some("miscellaneous error".to_string()),
+                games: None
+            })
+        }
+    }
+}
+
+#[post("/api/games/<game_token>/join", format = "json", data = "<req>")]
+fn join_game(state: State<'_, Api>, game_token: String, req: Json<Request>) -> Json<Response> {
+    let result = executor::block_on(state.db.join_game(&req.token, &game_token));
 
     match result {
         Ok(_) => {
-            response.set_sized_body(Cursor::new("{\"status\":true}"));
+            Json(Response {
+                status: true,
+                msg: None
+            })
         },
         Err(DbError::Auth) => {
-            response.set_sized_body(Cursor::new("{\"status\":false,\"msg\":\"user not found\"}"));
+            Json(Response {
+                status: false,
+                msg: Some("user not found".to_string())
+            })
         }
         Err(e) => {
             eprintln!("ERROR: {}", e);
-            response.set_sized_body(Cursor::new("{\"status\":false,\"msg\":\"miscellaneous error\"}"));
+            Json(Response {
+                status: false,
+                msg: Some("miscellaneous error".to_string())
+            })
         }
     }
-    response
+}
+
+fn process_html(html: String) -> String {
+    html.replace("./node_modules/react/umd", "/react")
+        .replace("./node_modules/react-dom/umd", "/react-dom")
+        .replace("./dist", "/dist")
+}
+
+#[get("/")]
+fn index(state: State<'_, Api>) -> Content<String> {
+    Content(ContentType::HTML, state.index.clone())
+}
+
+#[get("/games/<game_token>")]
+fn game(state: State<'_, Api>, game_token: String) -> Content<String> {
+    let game = state.game.clone();
+
+    Content(ContentType::HTML, game.replace("GAMETOKEN", &game_token))
 }

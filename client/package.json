@@ -14,10 +14,13 @@
     "@types/react-dom": "^16.9.8",
     "@typescript-eslint/eslint-plugin": "^3.1.0",
     "@typescript-eslint/parser": "^3.1.0",
+    "css-loader": "^3.5.3",
     "eslint": "^7.1.0",
     "eslint-plugin-react": "^7.20.0",
     "html-webpack-plugin": "^4.3.0",
+    "local-cors-proxy": "^1.1.0",
     "source-map-loader": "^1.0.0",
+    "style-loader": "^1.2.1",
     "ts-loader": "^7.0.5",
     "typescript": "^3.9.3",
     "webpack": "^4.43.0",
@@ -26,6 +29,7 @@
   },
   "dependencies": {
     "react": "^16.13.1",
+    "react-cookie": "^4.0.3",
     "react-dom": "^16.13.1"
   }
 }
