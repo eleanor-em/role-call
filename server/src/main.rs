@@ -4,7 +4,9 @@ use std::sync::Arc;
 use dotenv::dotenv;
 
 use rolecall::db::DbManager;
-use rolecall::api::Api;
+use rolecall::web::Api;
+use std::thread;
+use rolecall::game;
 
 #[tokio::main]
 async fn main() {
@@ -12,7 +14,8 @@ async fn main() {
 
     let db = create_db().await.unwrap();
     let api = Api::new(db.clone()).unwrap();
-    api.start();
+    thread::spawn(move || api.start());
+    game::ws_listen(9000).await.unwrap();
 }
 
 async fn create_db() -> Result<Arc<DbManager>, Box<dyn Error>> {

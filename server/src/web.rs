@@ -1,6 +1,6 @@
 use rocket::State;
 use rocket::response::Content;
-use rocket::http::{ContentType, Cookies};
+use rocket::http::ContentType;
 use rocket_contrib::json::Json;
 use rocket_contrib::serve::StaticFiles;
 use serde::{Serialize, Deserialize};

@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { LoadDisplay } from './LoadDisplay';
 import { api } from '../api';
 import { Landing } from './Landing';
-import { User, stripUserTag } from '../models/User';
+import { User } from '../models/User';
 import { useCookies } from 'react-cookie';
 import { Greeting } from './Greeting';
 
