@@ -1,9 +1,10 @@
-.App {
-    text-align: center;
+body {
     background-color: #0f111a;
-    min-height: 99vh;
+}
+.App {
+    padding-top: 1%;
+    text-align: center;
     color: #e2cca4;
-    border: solid 0.3em #090b10;
 }
 
 .AppHeader {
@@ -13,6 +14,13 @@
     align-items: row;
     justify-content: center;
     border-bottom: solid 0.3em #090b10;
+}
+
+.GameContainer {
+    margin-left: 1%;
+    flex: 5;
+    flex-direction: row;
+    background-color: #161824;
 }
 
 .Content {
