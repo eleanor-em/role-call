@@ -22,6 +22,22 @@ export interface ListGamesResponse {
     games?: [Game],
 }
 
+export interface CheckResponse {
+    status: boolean,
+    msg?: string,
+}
+
+async function check(token: string): Promise<CheckResponse> {
+    const response = await fetch(`${BASE_URL}/api/users/check`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json;charset=utf-8'
+        },
+        body: JSON.stringify({ token })
+    });
+    return await response.json();
+}
+
 async function auth(email: string, password: string): Promise<AuthResponse> {
     const response = await fetch(`${BASE_URL}/api/users/auth`, {
         method: 'POST',
@@ -70,6 +86,7 @@ async function joinedGames(user: User): Promise<ListGamesResponse> {
 }
 
 export const api = {
+    check,
     auth,
     createGame,
     hostedGames,

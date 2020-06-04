@@ -15,7 +15,7 @@ async fn main() {
     let db = create_db().await.unwrap();
     let api = Api::new(db.clone()).unwrap();
     thread::spawn(move || api.start());
-    game::ws_listen(9000).await.unwrap();
+    game::conn::ws_listen(db, 9000).await.unwrap();
 }
 
 async fn create_db() -> Result<Arc<DbManager>, Box<dyn Error>> {

@@ -173,9 +173,13 @@ impl DbManager {
         // for debug, create test users
         if env::var("ROLECALL_MODE").unwrap_or("release".to_string()) == "debug" {
             let token = self.create_user("admin", "password", "admin").await.unwrap();
-            self.confirm_user("admin", &token).await.unwrap();
+            let admin_token = self.confirm_user("admin", &token).await.unwrap();
             let token = self.create_user("player", "password", "player").await.unwrap();
-            self.confirm_user("player", &token).await.unwrap();
+            let player_token = self.confirm_user("player", &token).await.unwrap();
+            let game_token = self.create_game(&admin_token, &"Test Game").await.unwrap();
+            self.join_game(&player_token, &game_token).await.unwrap();
+            println!("DB: DEBUG: admin token: {}", admin_token);
+            println!("DB: DEBUG: player token: {}", player_token);
         }
 
         Ok(())
@@ -225,6 +229,7 @@ impl DbManager {
         let row = self.client.query_one(statement, &[&email, &token, &timeout, &nickname, &tag])
             .await?;
         let user_id: i32 = row.get(0);
+        println!("DB: generated new token for user #{}", user_id);
 
         let statement = "
             INSERT INTO identities(email, pw_hash, user_id)
@@ -305,8 +310,15 @@ impl DbManager {
 
         let statement = "
             INSERT INTO games (host, token, name)
-            VALUES ($1, $2, $3);";
-        self.client.execute(statement, &[&user_id, &game_token, &name]).await?;
+            VALUES ($1, $2, $3)
+            RETURNING id;";
+        let row = self.client.query_one(statement, &[&user_id, &game_token, &name]).await?;
+        let game_id: i32 = row.get(0);
+
+        let statement = "
+            INSERT INTO user_games (user_id, game_id)
+            VALUES ($1, $2);";
+        self.client.execute(statement, &[&user_id, &game_id]).await?;
 
         println!("DB: created game {} ({}) for user #{} ({})", game_token, name, user_id, username);
         Ok(game_token)
@@ -375,6 +387,38 @@ impl DbManager {
         self.client.execute(statement, &[&user_id, &name, &data]).await?;
         println!("DB: added asset \"{}\" to user #{} ({})", name, user_id, username);
         Ok(())
+    }
+
+    pub async fn can_access_game(&self, user_token: &str, game_token: &str) -> Result<bool, DbError> {
+        let statement = "
+            SELECT id
+            FROM games
+            WHERE token=$1;";
+        let row = self.client.query_one(statement, &[&game_token]).await?;
+        let game_id: i32 = row.get(0);
+
+        let statement = "
+            SELECT COUNT(1)
+            FROM user_games
+            INNER JOIN user_accounts
+                ON user_accounts.token=$2
+                AND user_games.user_id=user_accounts.id
+                AND user_games.game_id=$1;";
+        let row = self.client.query_one(statement, &[&game_id, &user_token]).await?;
+        let count: i64 = row.get(0);
+
+        Ok(count > 0)
+    }
+
+    pub async fn check_token(&self, user_token: &str) -> Result<bool, DbError> {
+        let statement = "
+            SELECT COUNT(1)
+            FROM user_accounts
+            WHERE token=$1;";
+        let row = self.client.query_one(statement, &[&user_token]).await?;
+        let count: i64 = row.get(0);
+
+        Ok(count > 0)
     }
 }
 

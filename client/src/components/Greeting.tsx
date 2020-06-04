@@ -8,8 +8,8 @@ export interface GreetingProps {
 
 export function Greeting(props: GreetingProps): React.ReactElement {
     return (
-        <span className="Greeting">Stay a while and listen
-            {props.user && `, ${stripUserTag(props.user.username)}`}
-        .</span>
+        <span className="Greeting">
+            Stay a while and listen{props.user && `, ${stripUserTag(props.user.username)}`}.
+        </span>
     );
 }

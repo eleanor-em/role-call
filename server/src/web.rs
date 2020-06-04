@@ -30,11 +30,13 @@ impl Api {
                                routes![index,
                                     game,
                                     new_user,
+                                    check_user,
                                     auth_user,
                                     new_game,
                                     join_game,
                                     hosted_games,
                                     joined_games])
+            .mount("/static", StaticFiles::from("./public/"))
             .mount("/dist", StaticFiles::from("../client/dist"))
             .mount("/react", StaticFiles::from("../client/node_modules/react/umd/"))
             .mount("/react-dom", StaticFiles::from("../client/node_modules/react-dom/umd/"))
@@ -111,6 +113,25 @@ fn new_user(state: State<'_, Api>, user: Json<UserCreateRequest>) -> Json<UserRe
                 username: None
             })
         }
+    }
+}
+
+#[post("/api/users/check", format = "json", data = "<user>")]
+fn check_user(state: State<'_, Api>, user: Json<Request>) -> Json<Response> {
+    let result = executor::block_on(state.db.check_token(&user.token));
+    match result {
+        Ok(true) => Json(Response{
+            status: true,
+            msg: None
+        }),
+        Ok(false) => Json(Response{
+            status: false,
+            msg: Some("token expired".to_string()),
+        }),
+        Err(_) => Json(Response {
+            status: false,
+            msg: Some("miscellaneous error".to_string()),
+        }),
     }
 }
 

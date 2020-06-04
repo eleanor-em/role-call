@@ -34,7 +34,8 @@ export function GameApp(props: GameProps): React.ReactElement {
                 username: result.username,
             };
             setUser(user);
-            setCookie('session', user, { sameSite: 'lax' });
+            setCookie('session', user, { sameSite: 'lax', path: '/' });
+            setCookie('session', user, { sameSite: 'lax', path: '/games' });
             setAppState(AppState.LoggedIn);
         } else {
             setMessage('Invalid email or password.');
@@ -44,8 +45,16 @@ export function GameApp(props: GameProps): React.ReactElement {
 
     useEffect(() => {
         if ('session' in cookies) {
-            setUser(cookies.session);
-            setAppState(AppState.LoggedIn);
+            const task = async () => {
+                const response = await api.check(cookies.session.token);
+                if (response.status) {
+                    setUser(cookies.session);
+                    setAppState(AppState.LoggedIn);
+                } else {
+                    setAppState(AppState.Login);
+                }
+            };
+            task();
         } else {
             setAppState(AppState.Login);
         }

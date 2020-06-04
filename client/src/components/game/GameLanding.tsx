@@ -3,6 +3,9 @@ import '../../css/App.css';
 import { User } from '../../models/User';
 import { Greeting } from '../Greeting';
 import { GameStage } from './GameStage';
+import { CommsComponent } from './CommsComponent';
+import { useState } from 'react';
+import { LoadDisplay } from '../LoadDisplay';
 
 
 export interface GameLandingProps {
@@ -11,13 +14,20 @@ export interface GameLandingProps {
 }
 
 export const GameLanding = function(props: GameLandingProps): React.ReactElement {
+    const [comms, setComms] = useState(null);
+
     return (
         <div style={{display: 'flex', flex: 1}}>
             <div className="GameContainer">
-                <GameStage />
+                <GameStage comms={comms} />
             </div>
             <div style={{flex: 1, flexDirection: 'row', height: '90%'}}>
-                <Greeting user={props.user} />
+                {comms ? <Greeting user={props.user} /> : <LoadDisplay />}
+                <CommsComponent
+                    user={props.user}
+                    gameToken={props.gameToken}
+                    onConnect={setComms}
+                />
             </div>
         </div>
     );
