@@ -53,11 +53,7 @@ export class Comms {
             socket.send(props.gameToken);
         };
 
-        socket.onclose = () => {
-            if (this.shouldShowRefresh && confirm('Warning: game has been disconnected. Refresh the page?')) {
-                window.location.reload();
-            }
-        };
+        socket.onclose = props.onDisconnect;
 
         socket.onmessage = message => {
             const data: any = JSON.parse(message.data.toString());
@@ -117,6 +113,7 @@ export interface CommsProps {
     user: User,
     gameToken: string,
     onConnect(comms: Comms): void,
+    onDisconnect(): void,
 }
 
 export function CommsComponent(props: CommsProps): React.ReactElement {

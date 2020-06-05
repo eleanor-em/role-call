@@ -7,6 +7,7 @@ import { useState } from 'react';
 export interface CreateGameProps {
     user: User,
     createGameCallback(name: string, token: string): void,
+    setMessage(msg: string): void,
 }
 
 export const CreateGame = function(props: CreateGameProps): React.ReactElement {
@@ -24,10 +25,10 @@ export const CreateGame = function(props: CreateGameProps): React.ReactElement {
                     clearInterval(interval);
                 }, 2000);
             } else {
-                alert(response.msg);
+                props.setMessage(`Failed to create game: ${response.msg}`);
             }
         } catch (_) {
-            alert('Error contacting server.');
+            props.setMessage(`Error contacting server.`);
         }
     }
 

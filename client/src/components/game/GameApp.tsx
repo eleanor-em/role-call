@@ -43,7 +43,8 @@ export function GameApp(props: GameProps): React.ReactElement {
                 setAppState(AppState.Login);
             }
         } catch (_) {
-            alert('Error contacting server.');
+            setMessage('Error contacting server.');
+            setAppState(AppState.Login);
         }
     }
 
@@ -56,10 +57,12 @@ export function GameApp(props: GameProps): React.ReactElement {
                         setUser(cookies.session);
                         setAppState(AppState.LoggedIn);
                     } else {
+                        setMessage('Your session has expired. Please log in again.');
                         setAppState(AppState.Login);
                     }
                 } catch (_) {
-                    alert('Error contacting server.');
+                    setMessage('Error contacting server.');
+                    setAppState(AppState.Login);
                 }
             };
             task();
@@ -75,13 +78,19 @@ export function GameApp(props: GameProps): React.ReactElement {
             case AppState.Loading:
                 return (<LoadDisplay />);
             case AppState.LoggedIn:
-                return (<GameLanding user={user} gameToken={props.gameToken} />);
+                return (
+                    <GameLanding
+                        user={user}
+                        gameToken={props.gameToken}
+                        setMessage={setMessage}
+                    />
+                );
         }
     }
 
     return (
         <div className="App">
-            {message && (<div>{message}</div>)}
+            {message && (<div className="InfoDisplay">{message} (<a href="#" onClick={window.location.reload}>reload</a>)</div>)}
             {getContents()}
         </div>
     );

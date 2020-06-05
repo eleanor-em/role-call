@@ -100,6 +100,10 @@ div.GameSidebar {
     padding-left: 0.5em;
     padding-right: 0.5em;
 }
+div.InfoDisplay {
+    padding-bottom: 1em;
+    font-size: 14pt;
+}
 
 a {
     outline: none !important;

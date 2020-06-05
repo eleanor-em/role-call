@@ -52,7 +52,7 @@ export const App = function(): React.ReactElement {
             case AppState.Loading:
                 return (<LoadDisplay />);
             case AppState.LoggedIn:
-                return (<Landing user={user} />);
+                return (<Landing user={user} setMessage={setMessage} />);
         }
     }
 

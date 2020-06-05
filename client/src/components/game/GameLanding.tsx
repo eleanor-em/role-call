@@ -12,6 +12,7 @@ import { faCrown } from '@fortawesome/free-solid-svg-icons';
 export interface GameLandingProps {
     user: User,
     gameToken: string,
+    setMessage(msg: string): void,
 }
 
 interface StoredPlayer {
@@ -44,7 +45,6 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
     });
 
     comms?.addFailedListener('GameLandingFailed', msg => {
-        alert(`Failed to connect to game: ${msg.FailedConnection.reason}`);
         setFailed(msg.FailedConnection.reason);
     });
 
@@ -73,6 +73,7 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
                 user={props.user}
                 gameToken={props.gameToken}
                 onConnect={setComms}
+                onDisconnect={() => props.setMessage('Connection lost. Try reloading the page.')}
             />
             <div className="GameContainer">
                 <GameStage comms={comms} />

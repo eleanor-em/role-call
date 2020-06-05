@@ -9,6 +9,7 @@ import { HostedGames } from './HostedGames';
 
 export interface LandingProps {
     user: User,
+    setMessage(msg: string): void,
 }
 
 export const Landing = function(props: LandingProps): React.ReactElement {
@@ -22,10 +23,10 @@ export const Landing = function(props: LandingProps): React.ReactElement {
                 if (result.status) {
                     setGames(result.games);
                 } else {
-                    alert('Loading games failed: ' + result.msg);
+                    props.setMessage(`Failed to load hosted games: ${result.msg}`);
                 }
             } catch (_) {
-                alert('Error contacting server.');
+                props.setMessage('Error contacting server.');
             }
         };
         task();
@@ -56,7 +57,13 @@ export const Landing = function(props: LandingProps): React.ReactElement {
                 })}
             </p>
             {selectedTab == 0 && (<HostedGames user={props.user} games={games} />)}
-            {selectedTab == 2 && (<CreateGame user={props.user} createGameCallback={onCreateGame} />)}
+            {selectedTab == 2 && (
+                <CreateGame
+                    user={props.user}
+                    createGameCallback={onCreateGame}
+                    setMessage={props.setMessage}
+                />
+            )}
         </div>
     );
 };
