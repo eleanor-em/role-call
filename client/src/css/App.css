@@ -92,3 +92,11 @@ div.PlayerName {
     text-align: left;
     padding-left: 1em;
 }
+
+div.GameSidebar {
+    flex: 1;
+    flex-direction: row;
+    height: 90%;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+}

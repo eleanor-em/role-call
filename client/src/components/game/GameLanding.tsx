@@ -73,7 +73,7 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
             <div className="GameContainer">
                 <GameStage comms={comms} />
             </div>
-            <div style={{flex: 1, flexDirection: 'row', height: '90%'}}>
+            <div className="GameSidebar">
                 <a href="/"><img src="/static/favicon-128.png" /></a>
                 {comms ? <Greeting user={props.user} /> : <LoadDisplay />}
                 {playerList}
