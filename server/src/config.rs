@@ -24,7 +24,7 @@ pub struct Config {
 fn load_config() -> Config {
     dotenv::dotenv().unwrap();
     let pepper = env::var("RC_PEPPER").unwrap_or_else(|_| {
-        println!("CONFIG: warning: generating random pepper");
+        info!("CONFIG: warning: generating random pepper");
         let bytes = argonautica::utils::generate_random_bytes(32)
             .expect("CONFIG: Failed to generate pepper");
         let mut s = String::new();
@@ -53,6 +53,12 @@ fn load_config() -> Config {
     } else {
         RunMode::Release
     };
+
+    simple_logger::init_with_level(env::var("RC_LOG_LEVEL").ok()
+        .and_then(|level| level.parse().ok())
+        .unwrap_or(log::Level::Info))
+        .expect("CONFIG: failed to initialise logger");
+
     let db_addr = env::var("RC_DB_ADDRESS").unwrap_or("localhost".to_string());
     let db_user = env::var("RC_DB_USER").unwrap_or("postgres".to_string());
     let db_password = env::var("RC_DB_PASSWORD").unwrap_or("password".to_string());

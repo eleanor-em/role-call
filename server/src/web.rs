@@ -153,7 +153,7 @@ fn auth_user(state: State<'_, Api>, user: Json<UserAuthRequest>) -> Json<UserRes
             username: None
         }),
         Err(e) => {
-            eprintln!("API: error: {}", e);
+            warn!("API: error: {}", e);
             Json(UserResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
@@ -186,7 +186,7 @@ fn new_game(state: State<'_, Api>, game: Json<GameCreateRequest>) -> Json<GameRe
             })
         }
         Err(e) => {
-            eprintln!("ERROR: {}", e);
+            warn!("ERROR: {}", e);
             Json(GameResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
@@ -217,7 +217,7 @@ fn hosted_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResp
             })
         }
         Err(e) => {
-            eprintln!("ERROR: {}", e);
+            warn!("ERROR: {}", e);
             Json(ListGamesResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
@@ -247,7 +247,7 @@ fn joined_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResp
             })
         }
         Err(e) => {
-            eprintln!("ERROR: {}", e);
+            warn!("ERROR: {}", e);
             Json(ListGamesResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
@@ -275,7 +275,7 @@ fn join_game(state: State<'_, Api>, game_token: String, req: Json<Request>) -> J
             })
         }
         Err(e) => {
-            eprintln!("ERROR: {}", e);
+            warn!("ERROR: {}", e);
             Json(Response {
                 status: false,
                 msg: Some("miscellaneous error".to_string())

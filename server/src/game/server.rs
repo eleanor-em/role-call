@@ -32,7 +32,7 @@ async fn server_monitor() {
             let num_clients = server.clients.pin().len();
 
             if num_clients == 0 && keepalive.elapsed() > CONFIG.game_timeout {
-                println!("SERVER: killing game server {}", game_token);
+                info!("killing game server {}", game_token);
                 to_kill.push(game_token.clone());
             }
         }
@@ -78,14 +78,14 @@ impl Server {
     async fn add_client(&self, user: UserInfo, tx: SyncSender<String>) {
         // Send existing client info
         let clients = self.clients.pin();
-        clients.keys().for_each(|user| {
+        for user in clients.keys() {
             if let Err(e) = tx.send(ProtocolMessage::Connect {
                 username: user.username.clone(),
                 host: user.is_host,
             }.to_string()) {
-                eprintln!("SERVER: failed sending users: {}", e);
+                warn!("failed sending users: {}", e);
             }
-        });
+        }
         // Send existing state info
         {
             let state = self.state.lock().unwrap();
@@ -93,7 +93,7 @@ impl Server {
         }
 
         clients.insert(user.clone(), tx);
-        println!("SERVER: New client for game {}: {}", self.game_token, user.token);
+        info!("New client for game {}: {}", self.game_token, user.token);
         self.recv(ProtocolMessage::Connect {
             username: user.username,
             host: user.is_host,
@@ -103,6 +103,14 @@ impl Server {
     pub fn close_client(&self, user: UserInfo) {
         let clients = self.clients.pin();
         clients.remove(&user);
+        for client in clients.values() {
+            info!("Sending disconnect update for {}", user.username);
+            if let Err(e) = client.send(ProtocolMessage::Disconnect {
+                username: user.username.clone()
+            }.to_string()) {
+                warn!("Failed sending disconnect update: {}", e);
+            }
+        }
         if clients.len() == 0 {
             let mut keepalive = self.keepalive.lock().unwrap();
             keepalive.replace(Instant::now());
@@ -117,20 +125,20 @@ impl Server {
                     state.process(parsed);
                 }
 
-                println!("SERVER: sending: {}", text);
+                info!("sending: {}", text);
                 let clients = self.clients.pin();
                 for tx in clients.values() {
                     if let Err(e) = tx.send(text.to_string()) {
-                        eprintln!("SERVER: failed writing: {}", e);
+                        warn!("failed writing: {}", e);
                     }
                 }
             } else {
-                eprintln!("SERVER: malformed message: {}", text);
+                warn!("malformed message: {}", text);
             }
         } else {
             match msg {
-                Message::Close(_) => println!("SERVER: Client closed"),
-                _ => eprintln!("SERVER: invalid message type"),
+                Message::Close(_) => info!("Client closed"),
+                _ => warn!("invalid message type"),
             }
         }
     }
@@ -140,7 +148,7 @@ pub fn connect_to_server(user: UserInfo, game_token: String, tx: SyncSender<Stri
     let mut servers = SERVERS.lock().unwrap();
     let server = servers.entry(game_token.clone())
         .or_insert_with(|| {
-            println!("SERVER: Create server for game {}", game_token);
+            info!("Create server for game {}", game_token);
             Arc::new(Server::new(game_token))
         });
     if !server.has_client(&user) {

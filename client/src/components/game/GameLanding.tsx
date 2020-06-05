@@ -39,6 +39,10 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
         }
     });
 
+    comms?.addDisconnectListener('GameLandingDisconnect', msg => {
+        setPlayers(players.filter(({ name }) => name != msg.Disconnect.username));
+    });
+
     comms?.addFailedListener('GameLandingFailed', msg => {
         alert(`Failed to connect to game: ${msg.FailedConnection.reason}`);
         setFailed(msg.FailedConnection.reason);
@@ -74,7 +78,7 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
                 <GameStage comms={comms} />
             </div>
             <div className="GameSidebar">
-                <a href="/"><img src="/static/favicon-128.png" /></a>
+                <a href="/"><img src="/static/favicon-128.png" onClick={() => { if (comms) { comms.shouldShowRefresh = false; } }} /></a>
                 {comms ? <Greeting user={props.user} /> : <LoadDisplay />}
                 {playerList}
             </div>

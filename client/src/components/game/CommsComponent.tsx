@@ -19,6 +19,12 @@ export interface ConnectMessage {
     }
 }
 
+export interface DisconnectMessage {
+    Disconnect: {
+        username: string,
+    }
+}
+
 export interface FailedConnectionMessage {
     FailedConnection: {
         reason: string,
@@ -29,15 +35,17 @@ export class Comms {
     socket: W3cWebSocket;
     placeTokenListeners: Record<string, (msg: PlaceTokenMessage) => void>;
     connectListeners: Record<string, (msg: ConnectMessage) => void>;
+    disconnectListeners: Record<string, (msg: DisconnectMessage) => void>;
     failedListeners: Record<string, (msg: FailedConnectionMessage) => void>;
-    failed: boolean;
+    shouldShowRefresh: boolean;
 
     constructor(socket: W3cWebSocket, props: CommsProps) {
         this.socket = socket;
         this.placeTokenListeners = {};
         this.connectListeners = {};
+        this.disconnectListeners = {};
         this.failedListeners = {};
-        this.failed = false;
+        this.shouldShowRefresh = true;
 
         socket.onopen = () => {
             props.onConnect(this);
@@ -46,7 +54,7 @@ export class Comms {
         };
 
         socket.onclose = () => {
-            if (!this.failed && confirm('Warning: game has been disconnected. Refresh the page?')) {
+            if (this.shouldShowRefresh && confirm('Warning: game has been disconnected. Refresh the page?')) {
                 window.location.reload();
             }
         };
@@ -64,8 +72,14 @@ export class Comms {
                     Object.values(this.connectListeners).forEach(op => op(data));
                     break;
                 }
+                case 'Disconnect': {
+                    data.Disconnect.kind = TokenType[data.Disconnect.kind];
+                    Object.values(this.disconnectListeners).forEach(op => op(data));
+                    break;
+                }
                 case 'FailedConnection': {
-                    this.failed = true;
+                    // If the websocket failed, don't pop up since the user will see a splash screen
+                    this.shouldShowRefresh = false;
                     data.FailedConnection.kind = TokenType[data.FailedConnection.kind];
                     Object.values(this.failedListeners).forEach(op => op(data));
                     break;
@@ -81,12 +95,17 @@ export class Comms {
         }));
     }
 
+    // Listeners should use a unique reference string, to prevent duplicate listeners.
     addPlaceTokenListener(ref: string, listener: ((msg: PlaceTokenMessage) => void)): void {
         this.placeTokenListeners[ref] = listener;
     }
 
     addConnectListener(ref: string, listener: ((msg: ConnectMessage) => void)): void {
         this.connectListeners[ref] = listener;
+    }
+
+    addDisconnectListener(ref: string, listener: ((msg: DisconnectMessage) => void)): void {
+        this.disconnectListeners[ref] = listener;
     }
 
     addFailedListener(ref: string, listener: ((msg: FailedConnectionMessage) => void)): void {
@@ -102,7 +121,6 @@ export interface CommsProps {
 
 export function CommsComponent(props: CommsProps): React.ReactElement {
     useEffect(() => {
-        console.log('setting up websocket');
         new Comms(new W3cWebSocket(process.env.RC_WEBSOCKET_URL), props);
     }, []);
 

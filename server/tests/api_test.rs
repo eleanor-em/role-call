@@ -112,7 +112,7 @@ mod tests {
             .await.unwrap()
             .json()
             .await.unwrap();
-        println!("{:?}", res.msg);
+        info!("{:?}", res.msg);
         let player_token = res.token.unwrap();
 
         // Attempt to join game

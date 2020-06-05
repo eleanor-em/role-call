@@ -54,17 +54,17 @@ impl GameConnection {
         // Check that the first two messages received are the user and game token
         if let Some(Ok(user_token)) = ws.next().await {
             let user_token = user_token.into_text()?.trim().to_string();
-            println!("WS: received user token: {}", user_token);
+            info!("received user token: {}", user_token);
             if let Some(Ok(game_token)) = ws.next().await {
                 let game_token = game_token.into_text()?.trim().to_string();
-                println!("WS: received game token: {}", game_token);
+                info!("received game token: {}", game_token);
                 Ok(Self { ws, user_token, game_token })
             } else {
-                eprintln!("WS: malformed game token");
+                warn!("malformed game token");
                 Err(GameError::Malformed)
             }
         } else {
-            eprintln!("WS: malformed user token");
+            warn!("malformed user token");
             Err(GameError::Malformed)
         }
     }
@@ -72,14 +72,14 @@ impl GameConnection {
     async fn start(mut self, db: Arc<DbManager>) {
         match db.check_game_permissions(&self.user_token, &self.game_token).await {
             Ok(GamePermission::None) => {
-                eprintln!("WS: failed game verification: user not in game");
+                warn!("failed game verification: user not in game");
             },
             Err(e) => {
-                eprintln!("WS: failed game verification: {}", e);
+                warn!("failed game verification: {}", e);
                 if let Err(e) = self.ws.send(ProtocolMessage::FailedConnection {
                             reason: "could not find game".to_string()
                         }.into_msg()).await {
-                    eprintln!("WS: failed to send error to client: {}", e);
+                    warn!("failed to send error to client: {}", e);
                 }
             },
             Ok(perm) => {
@@ -94,25 +94,25 @@ impl GameConnection {
                             std::thread::spawn(move || Self::forward_messages(writer, rx));
 
                             // Forward received data to the server
-                            println!("WS: verified connection");
+                            info!("verified connection");
                             while let Some(result) = reader.next().await {
                                 match result {
                                     Ok(result) => server.recv(result).await,
-                                    Err(e) => eprintln!("WS: error running connection: {}", e),
+                                    Err(e) => warn!("error running connection: {}", e),
                                 }
                             }
                             server.close_client(user);
                         } else {
-                            eprintln!("WS: user already connected");
+                            warn!("user already connected");
                             if let Err(e) = self.ws.send(ProtocolMessage::FailedConnection {
                                 reason: "user already connected".to_string()
                             }.into_msg()).await {
-                                eprintln!("WS: failed to send error to client: {}", e);
+                                warn!("failed to send error to client: {}", e);
                             }
                         }
                     },
                     Err(e) => {
-                        eprintln!("WS: error retrieving account information: {}", e);
+                        warn!("error retrieving account information: {}", e);
                     }
                 }
             },
@@ -123,10 +123,10 @@ impl GameConnection {
         // Listen to the receiver and forward any received messages to the websocket
         while let Ok(msg) = rx.recv() {
             if let Err(e) = futures::executor::block_on(writer.send(Message::Text(msg))) {
-                eprintln!("WS: failed writing: {}", e);
+                warn!("failed writing: {}", e);
             }
         }
-        eprintln!("WS: receiver closed");
+        warn!("receiver closed");
     }
 
     pub fn get_user(&self) -> String {
@@ -147,7 +147,7 @@ impl Hash for GameConnection {
 
 pub async fn ws_listen(db: Arc<DbManager>, addr: &str) -> Result<(), GameError> {
     let mut listener = TcpListener::bind(addr).await?;
-    println!("WS: Listening at: {}", addr);
+    info!("Listening at: {}", addr);
     while let Ok((stream, _)) = listener.accept().await {
         tokio::spawn(run_server(db.clone(), stream));
     }
@@ -157,6 +157,6 @@ pub async fn ws_listen(db: Arc<DbManager>, addr: &str) -> Result<(), GameError> 
 async fn run_server(db: Arc<DbManager>, stream: TcpStream) {
     match GameConnection::new(stream).await {
         Ok(conn) => conn.start(db).await,
-        Err(e) => eprintln!("WS: failed to receive client: {}", e),
+        Err(e) => warn!("failed to receive client: {}", e),
     }
 }

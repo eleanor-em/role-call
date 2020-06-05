@@ -22,7 +22,7 @@ impl GameState {
     pub fn replay(&self, tx: SyncSender<String>) {
         self.tokens.iter().for_each(|token| {
             if let Err(e) = tx.send(token.to_msg().to_string()) {
-                eprintln!("STATE: error forwarding token: {}", e)
+                warn!("STATE: error forwarding token: {}", e)
             }
         });
     }

@@ -89,7 +89,7 @@ impl DbManager {
 
         tokio::spawn(async move {
             if let Err(e) = conn.await {
-                eprintln!("database connection error: {}", e);
+                warn!("database connection error: {}", e);
             }
         });
 
@@ -198,8 +198,8 @@ impl DbManager {
             let player_token = self.confirm_user("player", &token).await.unwrap();
             let game_token = self.create_game(&admin_token, &"Test Game").await.unwrap();
             self.join_game(&player_token, &game_token).await.unwrap();
-            println!("DB: DEBUG: admin token: {}", admin_token);
-            println!("DB: DEBUG: player token: {}", player_token);
+            info!("DEBUG: admin token: {}", admin_token);
+            info!("DEBUG: player token: {}", player_token);
         }
 
         Ok(())
@@ -218,7 +218,7 @@ impl DbManager {
             INSERT INTO unconfirmed_identities(email, pw_hash, token, nickname)
             VALUES($1, $2, $3, $4);";
         self.client.execute(statement, &[&email, &pw_hash, &token, &nickname]).await?;
-        println!("DB: created new unverified user: {}", email);
+        info!("created new unverified user: {}", email);
 
         Ok(token)
     }
@@ -249,13 +249,13 @@ impl DbManager {
         let row = self.client.query_one(statement, &[&email, &token, &timeout, &nickname, &tag])
             .await?;
         let user_id: i32 = row.get(0);
-        println!("DB: generated new token for user #{}", user_id);
+        info!("generated new token for user #{}", user_id);
 
         let statement = "
             INSERT INTO identities(email, pw_hash, user_id)
             VALUES($1, $2, $3);";
         self.client.execute(statement, &[&email, &pw_hash, &user_id]).await?;
-        println!("DB: verified user id #{}: {}", user_id, email);
+        info!("verified user id #{}: {}", user_id, email);
         Ok(token)
     }
 
@@ -283,7 +283,7 @@ impl DbManager {
                 .with_secret_key(&CONFIG.pepper)
                 .verify()? {
             let (token, timeout) = self.create_user_token()?;
-            println!("DB: generated new token for user #{}", user_id);
+            info!("generated new token for user #{}", user_id);
 
             let statement = "
                 UPDATE user_accounts
@@ -340,7 +340,7 @@ impl DbManager {
             VALUES ($1, $2);";
         self.client.execute(statement, &[&user_id, &game_id]).await?;
 
-        println!("DB: created game {} ({}) for user #{} ({})", game_token, name, user_id, username);
+        info!("created game {} ({}) for user #{} ({})", game_token, name, user_id, username);
         Ok(game_token)
     }
 
@@ -365,7 +365,7 @@ impl DbManager {
             INSERT INTO user_games(user_id, game_id)
             VALUES ($1, $2)";
         self.client.execute(statement, &[&user_id, &game_id]).await?;
-        println!("DB: user #{} ({}) joined game {}", user_id, username, game_token);
+        info!("user #{} ({}) joined game {}", user_id, username, game_token);
         Ok(())
     }
 
@@ -405,7 +405,7 @@ impl DbManager {
             INSERT INTO assets (owner, name, data)
             VALUES ($1, $2, $3);";
         self.client.execute(statement, &[&user_id, &name, &data]).await?;
-        println!("DB: added asset \"{}\" to user #{} ({})", name, user_id, username);
+        info!("added asset \"{}\" to user #{} ({})", name, user_id, username);
         Ok(())
     }
 
