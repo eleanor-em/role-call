@@ -8,6 +8,7 @@ use std::sync::mpsc::SyncSender;
 use std::hash::{Hash, Hasher};
 use crate::game::state::GameState;
 use tokio::time::{Instant, Duration};
+use crate::game::conn::GameError;
 
 lazy_static! {
     static ref SERVERS: Mutex<HashMap<String, Arc<Server>>> = {
@@ -66,6 +67,10 @@ impl Server {
         let state = Mutex::new(GameState::new());
         let keepalive = Mutex::new(Some(Instant::now()));
         Self { game_token, clients, state, keepalive }
+    }
+
+    fn has_client(&self, user: &UserInfo) -> bool {
+        self.clients.pin().contains_key(user)
     }
 
     async fn add_client(&self, user: UserInfo, tx: SyncSender<String>) {
@@ -129,13 +134,17 @@ impl Server {
     }
 }
 
-pub fn connect_to_server(user: UserInfo, game_token: String, tx: SyncSender<String>) -> Arc<Server> {
+pub fn connect_to_server(user: UserInfo, game_token: String, tx: SyncSender<String>) -> Result<Arc<Server>, GameError> {
     let mut servers = SERVERS.lock().unwrap();
     let server = servers.entry(game_token.clone())
         .or_insert_with(|| {
             println!("SERVER: Create server for game {}", game_token);
             Arc::new(Server::new(game_token))
         });
-    futures::executor::block_on(server.add_client(user, tx));
-    Arc::clone(server)
+    if !server.has_client(&user) {
+        futures::executor::block_on(server.add_client(user, tx));
+        Ok(Arc::clone(server))
+    } else {
+        Err(GameError::AlreadyConnected)
+    }
 }

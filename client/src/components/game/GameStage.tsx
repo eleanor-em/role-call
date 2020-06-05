@@ -83,7 +83,9 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     function handleMouseDown(ev: any): void {
         // 0 is the left mouse button, 1 is the middle mouse button
         if (ev.evt.button == 0) {
-            if (selected != TokenType.None) {
+            if (ev.evt.shiftKey) {
+                onDragStart();
+            } else if (selected != TokenType.None) {
                 const { x, y } = snapToGrid(mouseCoord.x, mouseCoord.y);
                 props.comms?.placeToken(selected, x - topLeft.x, y - topLeft.y);
             }
@@ -106,8 +108,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         setDragGrid(false);        
     }
 
-    function handleMouseUp(ev: any): void {
-        if (ev.evt.button == 1) {
+    function handleMouseUp(_: any): void {
+        if (dragGrid) {
             onDragEnd();
         }
     }

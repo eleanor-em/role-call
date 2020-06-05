@@ -18,6 +18,7 @@ pub enum GameError {
     Io(std::io::Error),
     WebSocket(WsError),
     Malformed,
+    AlreadyConnected,
 }
 
 impl From<tokio::io::Error> for GameError {
@@ -86,22 +87,29 @@ impl GameConnection {
                 match db.get_account(&self.user_token).await {
                     Ok((_, username)) => {
                         let user = UserInfo { token: self.user_token, username, is_host: perm == GamePermission::Host };
-
-                        // Create communication channels and spawn handlers
-                        let (writer, mut reader) = self.ws.split();
                         let (tx, rx) = std::sync::mpsc::sync_channel(100);
-                        std::thread::spawn(move || Self::forward_messages(writer, rx));
-                        let server = connect_to_server(user.clone(), self.game_token, tx);
+                        if let Ok(server) = connect_to_server(user.clone(), self.game_token, tx) {
+                            // Create communication channels and spawn handlers
+                            let (writer, mut reader) = self.ws.split();
+                            std::thread::spawn(move || Self::forward_messages(writer, rx));
 
-                        // Forward received data to the server
-                        println!("WS: verified connection");
-                        while let Some(result) = reader.next().await {
-                            match result {
-                                Ok(result) => server.recv(result).await,
-                                Err(e) => eprintln!("WS: error running connection: {}", e),
+                            // Forward received data to the server
+                            println!("WS: verified connection");
+                            while let Some(result) = reader.next().await {
+                                match result {
+                                    Ok(result) => server.recv(result).await,
+                                    Err(e) => eprintln!("WS: error running connection: {}", e),
+                                }
+                            }
+                            server.close_client(user);
+                        } else {
+                            eprintln!("WS: user already connected");
+                            if let Err(e) = self.ws.send(ProtocolMessage::FailedConnection {
+                                reason: "user already connected".to_string()
+                            }.into_msg()).await {
+                                eprintln!("WS: failed to send error to client: {}", e);
                             }
                         }
-                        server.close_client(user);
                     },
                     Err(e) => {
                         eprintln!("WS: error retrieving account information: {}", e);
