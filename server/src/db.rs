@@ -1,13 +1,12 @@
 use futures::future;
 use tokio_postgres::{NoTls, Client};
 use std::sync::Arc;
-use std::env;
 use argonautica::{Hasher, Verifier};
 use std::fmt::{Formatter, Display, Write};
 use std::time::SystemTime;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use tokio::time::Duration;
+use crate::config::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Game {
@@ -72,8 +71,6 @@ impl std::error::Error for DbError {}
 
 pub struct DbManager {
     client: Arc<Client>,
-    pepper: String,
-    token_timeout: Duration,
 }
 
 pub type UserId = i32;
@@ -82,12 +79,13 @@ pub type GameId = i32;
 
 impl DbManager {
     pub async fn new() -> Result<Self, DbError> {
-        // TODO: create config struct
-        let (client, conn) = tokio_postgres::connect("host=localhost user=postgres password=password dbname=rolecall", NoTls)
+        let (client, conn) = tokio_postgres::Config::new()
+            .host(&CONFIG.db_addr)
+            .user(&CONFIG.db_user)
+            .password(&CONFIG.db_password)
+            .dbname(&CONFIG.db_name)
+            .connect(NoTls)
             .await?;
-        let pepper = env::var("RC_PEPPER")?;
-        let token_timeout = env::var("RC_SESSION_TIMEOUT")?.parse()?;
-        let token_timeout = Duration::from_secs(token_timeout);
 
         tokio::spawn(async move {
             if let Err(e) = conn.await {
@@ -96,7 +94,7 @@ impl DbManager {
         });
 
         let client = Arc::new(client);
-        let db = Self { client, pepper, token_timeout };
+        let db = Self { client };
         Ok(db)
     }
 
@@ -108,7 +106,7 @@ impl DbManager {
         let token = argonautica::utils::generate_random_base64_encoded_string(32)?;
         let timestamp = Self::timestamp()?;
         // Add 1 day to the timeout
-        Ok((token, timestamp + self.token_timeout.as_millis() as Timestamp))
+        Ok((token, timestamp + CONFIG.user_token_timeout.as_millis() as Timestamp))
     }
 
     fn create_user_tag() -> String {
@@ -118,10 +116,10 @@ impl DbManager {
     }
 
     fn create_game_token() -> Result<String, DbError> {
-        let bytes = argonautica::utils::generate_random_bytes(7)?;
+        let bytes = argonautica::utils::generate_random_bytes(8)?;
         let mut s = String::new();
         for byte in bytes {
-            write!(&mut s, "{:X}", byte).expect("Unable to write");
+            write!(&mut s, "{:X}", byte).unwrap();
         }
 
         Ok(s.to_lowercase())
@@ -193,7 +191,7 @@ impl DbManager {
         ).await?;
 
         // for debug, create test users
-        if env::var("RC_MODE").unwrap_or("release".to_string()) == "debug" {
+        if CONFIG.mode == RunMode::Debug {
             let token = self.create_user("admin", "password", "admin").await.unwrap();
             let admin_token = self.confirm_user("admin", &token).await.unwrap();
             let token = self.create_user("player", "password", "player").await.unwrap();
@@ -212,7 +210,7 @@ impl DbManager {
         let mut hasher = Hasher::default();
         let pw_hash = hasher
             .with_password(password)
-            .with_secret_key(&self.pepper)
+            .with_secret_key(&CONFIG.pepper)
             .hash()?;
 
         // Create new unconfirmed user
@@ -282,7 +280,7 @@ impl DbManager {
         let mut verifier = Verifier::default();
         if verifier.with_hash(pw_hash)
                 .with_password(password)
-                .with_secret_key(&self.pepper)
+                .with_secret_key(&CONFIG.pepper)
                 .verify()? {
             let (token, timeout) = self.create_user_token()?;
             println!("DB: generated new token for user #{}", user_id);

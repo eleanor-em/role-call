@@ -1,7 +1,7 @@
 import { Game } from './models/Game';
 import { User } from './models/User';
 
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = process.env.RC_API_URL;
 
 export interface AuthResponse {
     status: boolean,

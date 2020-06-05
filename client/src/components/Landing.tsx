@@ -17,11 +17,15 @@ export const Landing = function(props: LandingProps): React.ReactElement {
 
     useEffect(() => {
         const task = async () => {
-            const result = await api.hostedGames(props.user);
-            if (result.status) {
-                setGames(result.games);
-            } else {
-                alert('loading games failed: ' + result.msg);
+            try {
+                const result = await api.hostedGames(props.user);
+                if (result.status) {
+                    setGames(result.games);
+                } else {
+                    alert('Loading games failed: ' + result.msg);
+                }
+            } catch (_) {
+                alert('Error contacting server.');
             }
         };
         task();

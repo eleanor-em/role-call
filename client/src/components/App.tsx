@@ -24,18 +24,23 @@ export const App = function(): React.ReactElement {
     async function login(email: string, password: string): Promise<void> {
         setMessage('');
         setAppState(AppState.Loading);
-        const result = await api.auth(email, password);
-        if (result.status) {
-            const user = {
-                token: result.token,
-                username: result.username,
-            };
-            setUser(user);
-            setCookie('session', user, { sameSite: 'lax', path: '/' });
-            setCookie('session', user, { sameSite: 'lax', path: '/games' });
-            setAppState(AppState.LoggedIn);
-        } else {
-            setMessage('Invalid email or password.');
+        try {
+            const result = await api.auth(email, password);
+            if (result.status) {
+                const user = {
+                    token: result.token,
+                    username: result.username,
+                };
+                setUser(user);
+                setCookie('session', user, { sameSite: 'lax', path: '/' });
+                setCookie('session', user, { sameSite: 'lax', path: '/games' });
+                setAppState(AppState.LoggedIn);
+            } else {
+                setMessage('Invalid email or password.');
+                setAppState(AppState.Login);
+            }
+        } catch (e) {
+            setMessage('Error contacting server.');
             setAppState(AppState.Login);
         }
     }
@@ -54,11 +59,16 @@ export const App = function(): React.ReactElement {
     useEffect(() => {
         if ('session' in cookies) {
             const task = async () => {
-                const response = await api.check(cookies.session.token);
-                if (response.status) {
-                    setUser(cookies.session);
-                    setAppState(AppState.LoggedIn);
-                } else {
+                try {
+                    const response = await api.check(cookies.session.token);
+                    if (response.status) {
+                        setUser(cookies.session);
+                        setAppState(AppState.LoggedIn);
+                    } else {
+                        setAppState(AppState.Login);
+                    }
+                } catch (_) {
+                    setMessage('Error contacting server.');
                     setAppState(AppState.Login);
                 }
             };

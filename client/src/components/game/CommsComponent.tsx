@@ -103,7 +103,7 @@ export interface CommsProps {
 export function CommsComponent(props: CommsProps): React.ReactElement {
     useEffect(() => {
         console.log('setting up websocket');
-        new Comms(new W3cWebSocket('ws://localhost:9000'), props);
+        new Comms(new W3cWebSocket(process.env.RC_WEBSOCKET_URL), props);
     }, []);
 
     return (null);

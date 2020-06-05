@@ -6,9 +6,12 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::game::protocol::ProtocolMessage;
 use std::sync::mpsc::SyncSender;
 use std::hash::{Hash, Hasher};
-use crate::game::state::GameState;
-use tokio::time::{Instant, Duration};
+
+use tokio::time::Instant;
+
+use crate::config::CONFIG;
 use crate::game::conn::GameError;
+use crate::game::state::GameState;
 
 lazy_static! {
     static ref SERVERS: Mutex<HashMap<String, Arc<Server>>> = {
@@ -18,9 +21,8 @@ lazy_static! {
 }
 
 async fn server_monitor() {
-    const TIMEOUT: Duration = Duration::from_secs(1 * 60);
     loop {
-        tokio::time::delay_for(Duration::from_secs(5 * 60)).await;
+        tokio::time::delay_for(CONFIG.monitor_interval).await;
         let mut servers = SERVERS.lock().unwrap();
         let mut to_kill = Vec::new();
 
@@ -29,7 +31,7 @@ async fn server_monitor() {
             let keepalive = server.keepalive.lock().unwrap().unwrap();
             let num_clients = server.clients.pin().len();
 
-            if num_clients == 0 && keepalive.elapsed() > TIMEOUT {
+            if num_clients == 0 && keepalive.elapsed() > CONFIG.game_timeout {
                 println!("SERVER: killing game server {}", game_token);
                 to_kill.push(game_token.clone());
             }

@@ -14,16 +14,20 @@ export const CreateGame = function(props: CreateGameProps): React.ReactElement {
     const [showButton, setShowButton] = useState(true);
 
     async function handleSubmit() {
-        const response = await api.createGame(props.user, name);
-        if (response.status) {
-            props.createGameCallback(name, response.token);
-            setShowButton(false);
-            const interval = setInterval(() => {
-                setShowButton(true);
-                clearInterval(interval);
-            }, 2000);
-        } else {
-            alert(response.msg);
+        try {
+            const response = await api.createGame(props.user, name);
+            if (response.status) {
+                props.createGameCallback(name, response.token);
+                setShowButton(false);
+                const interval = setInterval(() => {
+                    setShowButton(true);
+                    clearInterval(interval);
+                }, 2000);
+            } else {
+                alert(response.msg);
+            }
+        } catch (_) {
+            alert('Error contacting server.');
         }
     }
 

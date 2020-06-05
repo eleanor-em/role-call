@@ -145,9 +145,9 @@ impl Hash for GameConnection {
     }
 }
 
-pub async fn ws_listen(db: Arc<DbManager>, port: u16) -> Result<(), GameError> {
-    let mut listener = TcpListener::bind(format!("localhost:{}", port)).await?;
-    println!("WS: Listening on port {}", port);
+pub async fn ws_listen(db: Arc<DbManager>, addr: &str) -> Result<(), GameError> {
+    let mut listener = TcpListener::bind(addr).await?;
+    println!("WS: Listening at: {}", addr);
     while let Ok((stream, _)) = listener.accept().await {
         tokio::spawn(run_server(db.clone(), stream));
     }
