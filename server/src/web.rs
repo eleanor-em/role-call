@@ -140,24 +140,20 @@ fn auth_user(state: State<'_, Api>, user: Json<UserAuthRequest>) -> Json<UserRes
     let result = executor::block_on(state.db.auth_user(&user.email, &user.password));
 
     match result {
-        Ok((token, username)) => {
-            Json(UserResponse {
-                status: true,
-                msg: None,
-                token: Some(token),
-                username: Some(username)
-            })
-        },
-        Err(DbError::Auth) => {
-            Json(UserResponse {
-                status: false,
-                msg: Some("user not found".to_string()),
-                token: None,
-                username: None
-            })
-        }
+        Ok((token, username)) => Json(UserResponse {
+            status: true,
+            msg: None,
+            token: Some(token),
+            username: Some(username)
+        }),
+        Err(DbError::Auth) => Json(UserResponse {
+            status: false,
+            msg: Some("user not found".to_string()),
+            token: None,
+            username: None
+        }),
         Err(e) => {
-            eprintln!("ERROR: {}", e);
+            eprintln!("API: error: {}", e);
             Json(UserResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),

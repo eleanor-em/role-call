@@ -12,13 +12,22 @@ export interface PlaceTokenMessage {
     }
 }
 
+export interface ConnectMessage {
+    Connect: {
+        username: string,
+        host: boolean,
+    }
+}
+
 export class Comms {
     socket: W3cWebSocket;
     placeTokenListeners: Record<string, (msg: PlaceTokenMessage) => void>;
+    connectListeners: Record<string, (msg: ConnectMessage) => void>;
 
     constructor(socket: W3cWebSocket, props: CommsProps) {
         this.socket = socket;
         this.placeTokenListeners = {};
+        this.connectListeners = {};
 
         socket.onopen = () => {
             props.onConnect(this);
@@ -40,6 +49,11 @@ export class Comms {
                     Object.values(this.placeTokenListeners).forEach(op => op(data));
                     break;
                 }
+                case 'Connect': {
+                    data.Connect.kind = TokenType[data.Connect.kind];
+                    Object.values(this.connectListeners).forEach(op => op(data));
+                    break;
+                }
             }
         };
     }
@@ -53,6 +67,10 @@ export class Comms {
 
     addPlaceTokenListener(ref: string, listener: ((msg: PlaceTokenMessage) => void)): void {
         this.placeTokenListeners[ref] = listener;
+    }
+
+    addConnectListener(ref: string, listener: ((msg: ConnectMessage) => void)): void {
+        this.connectListeners[ref] = listener;
     }
 }
 

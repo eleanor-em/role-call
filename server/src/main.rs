@@ -10,12 +10,12 @@ use rolecall::game;
 
 #[tokio::main]
 async fn main() {
-    dotenv().unwrap();
+    dotenv().expect("MAIN: failed loading config");
 
-    let db = create_db().await.unwrap();
-    let api = Api::new(db.clone()).unwrap();
+    let db = create_db().await.expect("MAIN: failed loading database");
+    let api = Api::new(db.clone()).expect("MAIN: failed starting web server");
     thread::spawn(move || api.start());
-    game::conn::ws_listen(db, 9000).await.unwrap();
+    game::conn::ws_listen(db, 9000).await.expect("MAIN: failed starting websocket server");
 }
 
 async fn create_db() -> Result<Arc<DbManager>, Box<dyn Error>> {

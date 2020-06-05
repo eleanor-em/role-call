@@ -1,13 +1,16 @@
+use std::fmt::{Formatter, Display};
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
+use std::sync::mpsc::Receiver;
+
 use futures::{StreamExt, SinkExt};
+use futures::stream::SplitSink;
+
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{tungstenite::Message, accept_async, tungstenite::Error as WsError, WebSocketStream};
-use std::fmt::{Formatter, Display};
-use std::sync::Arc;
-use futures::stream::SplitSink;
-use crate::db::DbManager;
-use crate::game::server::connect_to_server;
-use std::hash::{Hash, Hasher};
-use std::sync::mpsc::Receiver;
+
+use crate::db::{DbManager, GamePermission};
+use crate::game::server::{connect_to_server, UserInfo};
 
 #[derive(Debug)]
 pub enum GameError {
@@ -45,6 +48,8 @@ pub struct GameConnection {
 impl GameConnection {
     async fn new(stream: TcpStream) -> Result<Self, GameError> {
         let mut ws = accept_async(stream).await?;
+
+        // Check that the first two messages received are the user and game token
         if let Some(Ok(user_token)) = ws.next().await {
             let user_token = user_token.into_text()?.trim().to_string();
             println!("WS: received user token: {}", user_token);
@@ -63,34 +68,46 @@ impl GameConnection {
     }
 
     async fn start(self, db: Arc<DbManager>) {
-        match db.can_access_game(&self.user_token, &self.game_token).await {
-            Ok(true) => {
-                let (writer, mut reader) = self.ws.split();
-                let (tx, rx) = std::sync::mpsc::sync_channel(100);
-                std::thread::spawn(move || Self::forward_messages(writer, rx));
-
-                let server = connect_to_server(self.user_token.clone(), self.game_token, tx);
-                println!("WS: verified connection");
-                while let Some(result) = reader.next().await {
-                    match result {
-                        Ok(result) => server.recv(&self.user_token, result).await,
-                        Err(e) => eprintln!("WS: error running connection: {}", e),
-                    }
-                }
-                server.close_client(self.user_token);
-            },
-            Ok(false) => {
+        match db.check_game_permissions(&self.user_token, &self.game_token).await {
+            Ok(GamePermission::None) => {
                 eprintln!("WS: failed game verification: user not in game");
             },
             Err(e) => {
                 eprintln!("WS: failed game verification: {}", e);
-            }
+            },
+            Ok(perm) => {
+                // Load user information
+                match db.get_account(&self.user_token).await {
+                    Ok((_, username)) => {
+                        let user = UserInfo { token: self.user_token, username, is_host: perm == GamePermission::Host };
+
+                        // Create communication channels and spawn handlers
+                        let (writer, mut reader) = self.ws.split();
+                        let (tx, rx) = std::sync::mpsc::sync_channel(100);
+                        std::thread::spawn(move || Self::forward_messages(writer, rx));
+                        let server = connect_to_server(user.clone(), self.game_token, tx);
+
+                        // Forward received data to the server
+                        println!("WS: verified connection");
+                        while let Some(result) = reader.next().await {
+                            match result {
+                                Ok(result) => server.recv(result).await,
+                                Err(e) => eprintln!("WS: error running connection: {}", e),
+                            }
+                        }
+                        server.close_client(user);
+                    },
+                    Err(e) => {
+                        eprintln!("WS: error retrieving account information: {}", e);
+                    }
+                }
+            },
         }
     }
 
     fn forward_messages(mut writer: SplitSink<WebSocketStream<TcpStream>, Message>, rx: Receiver<String>) {
+        // Listen to the receiver and forward any received messages to the websocket
         while let Ok(msg) = rx.recv() {
-            println!("WS: forwarding message {}", msg);
             if let Err(e) = futures::executor::block_on(writer.send(Message::Text(msg))) {
                 eprintln!("WS: failed writing: {}", e);
             }

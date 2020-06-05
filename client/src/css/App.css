@@ -81,3 +81,9 @@ span.UnselectedTab {
 span.UnselectedTab:hover {
     color: #8f723d;
 }
+
+div.PlayerName {
+    font-size: 10pt;
+    text-align: left;
+    padding-left: 1em;
+}

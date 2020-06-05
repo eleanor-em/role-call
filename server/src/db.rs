@@ -7,6 +7,7 @@ use std::fmt::{Formatter, Display, Write};
 use std::time::SystemTime;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use tokio::time::Duration;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Game {
@@ -14,11 +15,20 @@ pub struct Game {
     name: String,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum GamePermission {
+    Host,
+    Player,
+    None,
+}
+
 #[derive(Debug)]
 pub enum DbError {
     Sql(tokio_postgres::Error),
     Hash(argonautica::Error),
     Time(std::time::SystemTimeError),
+    Config(std::env::VarError),
+    ConfigParse,
     Auth,
 }
 
@@ -40,6 +50,18 @@ impl From<std::time::SystemTimeError> for DbError {
     }
 }
 
+impl From<std::env::VarError> for DbError {
+    fn from(e: std::env::VarError) -> Self {
+        Self::Config(e)
+    }
+}
+
+impl From<std::num::ParseIntError> for DbError {
+    fn from(_: std::num::ParseIntError) -> Self {
+        Self::ConfigParse
+    }
+}
+
 impl Display for DbError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
@@ -50,6 +72,8 @@ impl std::error::Error for DbError {}
 
 pub struct DbManager {
     client: Arc<Client>,
+    pepper: String,
+    token_timeout: Duration,
 }
 
 pub type UserId = i32;
@@ -61,6 +85,9 @@ impl DbManager {
         // TODO: create config struct
         let (client, conn) = tokio_postgres::connect("host=localhost user=postgres password=password dbname=rolecall", NoTls)
             .await?;
+        let pepper = env::var("RC_PEPPER")?;
+        let token_timeout = env::var("RC_SESSION_TIMEOUT")?.parse()?;
+        let token_timeout = Duration::from_secs(token_timeout);
 
         tokio::spawn(async move {
             if let Err(e) = conn.await {
@@ -69,24 +96,19 @@ impl DbManager {
         });
 
         let client = Arc::new(client);
-        let db = Self { client };
+        let db = Self { client, pepper, token_timeout };
         Ok(db)
-    }
-
-    fn get_pepper() -> String {
-        env::var("ROLECALL_PEPPER").unwrap()
     }
 
     fn timestamp() -> Result<Timestamp, DbError> {
         Ok(SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis() as Timestamp)
     }
 
-    fn create_user_token() -> Result<(String, Timestamp), DbError> {
+    fn create_user_token(&self) -> Result<(String, Timestamp), DbError> {
         let token = argonautica::utils::generate_random_base64_encoded_string(32)?;
         let timestamp = Self::timestamp()?;
-        let delta = env::var("RC_SESSION_TIMEOUT").unwrap().parse().unwrap();
         // Add 1 day to the timeout
-        Ok((token, timestamp + std::time::Duration::from_secs(delta).as_millis() as Timestamp))
+        Ok((token, timestamp + self.token_timeout.as_millis() as Timestamp))
     }
 
     fn create_user_tag() -> String {
@@ -96,7 +118,7 @@ impl DbManager {
     }
 
     fn create_game_token() -> Result<String, DbError> {
-        let bytes = argonautica::utils::generate_random_bytes(12)?;
+        let bytes = argonautica::utils::generate_random_bytes(7)?;
         let mut s = String::new();
         for byte in bytes {
             write!(&mut s, "{:X}", byte).expect("Unable to write");
@@ -171,7 +193,7 @@ impl DbManager {
         ).await?;
 
         // for debug, create test users
-        if env::var("ROLECALL_MODE").unwrap_or("release".to_string()) == "debug" {
+        if env::var("RC_MODE").unwrap_or("release".to_string()) == "debug" {
             let token = self.create_user("admin", "password", "admin").await.unwrap();
             let admin_token = self.confirm_user("admin", &token).await.unwrap();
             let token = self.create_user("player", "password", "player").await.unwrap();
@@ -186,11 +208,11 @@ impl DbManager {
     }
 
     pub async fn create_user(&self, email: &str, password: &str, nickname: &str) -> Result<String, DbError> {
-        let (token, _) = Self::create_user_token()?;
+        let (token, _) = self.create_user_token()?;
         let mut hasher = Hasher::default();
         let pw_hash = hasher
             .with_password(password)
-            .with_secret_key(Self::get_pepper())
+            .with_secret_key(&self.pepper)
             .hash()?;
 
         // Create new unconfirmed user
@@ -221,7 +243,7 @@ impl DbManager {
         let (pw_hash, nickname) = self.remove_unconfirmed(email, token).await?;
         let tag = Self::create_user_tag();
 
-        let (token, timeout) = Self::create_user_token()?;
+        let (token, timeout) = self.create_user_token()?;
         let statement = "
             INSERT INTO user_accounts(email, token, timeout, nickname, tag)
             VALUES ($1, $2, $3, $4, $5)
@@ -260,9 +282,9 @@ impl DbManager {
         let mut verifier = Verifier::default();
         if verifier.with_hash(pw_hash)
                 .with_password(password)
-                .with_secret_key(Self::get_pepper())
+                .with_secret_key(&self.pepper)
                 .verify()? {
-            let (token, timeout) = Self::create_user_token()?;
+            let (token, timeout) = self.create_user_token()?;
             println!("DB: generated new token for user #{}", user_id);
 
             let statement = "
@@ -281,7 +303,7 @@ impl DbManager {
         }
     }
 
-    async fn get_account(&self, token: &str) -> Result<(UserId, String), DbError> {
+    pub async fn get_account(&self, token: &str) -> Result<(UserId, String), DbError> {
         let statement = "
             SELECT id, timeout, nickname, tag
             FROM user_accounts
@@ -389,25 +411,34 @@ impl DbManager {
         Ok(())
     }
 
-    pub async fn can_access_game(&self, user_token: &str, game_token: &str) -> Result<bool, DbError> {
+    pub async fn check_game_permissions(&self, user_token: &str, game_token: &str) -> Result<GamePermission, DbError> {
         let statement = "
-            SELECT id
+            SELECT id, host
             FROM games
             WHERE token=$1;";
         let row = self.client.query_one(statement, &[&game_token]).await?;
         let game_id: i32 = row.get(0);
+        let host: i32 = row.get(1);
 
         let statement = "
-            SELECT COUNT(1)
+            SELECT COUNT(1), user_id
             FROM user_games
             INNER JOIN user_accounts
                 ON user_accounts.token=$2
                 AND user_games.user_id=user_accounts.id
-                AND user_games.game_id=$1;";
+                AND user_games.game_id=$1
+            GROUP BY user_id;";
         let row = self.client.query_one(statement, &[&game_id, &user_token]).await?;
         let count: i64 = row.get(0);
+        let user: i32 = row.get(1);
 
-        Ok(count > 0)
+        Ok(if user == host {
+            GamePermission::Host
+        } else if count > 0 {
+            GamePermission::Player
+        } else {
+            GamePermission::None
+        })
     }
 
     pub async fn check_token(&self, user_token: &str) -> Result<bool, DbError> {

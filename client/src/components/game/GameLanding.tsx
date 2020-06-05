@@ -3,18 +3,40 @@ import '../../css/App.css';
 import { User } from '../../models/User';
 import { Greeting } from '../Greeting';
 import { GameStage } from './GameStage';
-import { CommsComponent } from './CommsComponent';
+import { CommsComponent, Comms } from './CommsComponent';
 import { useState } from 'react';
 import { LoadDisplay } from '../LoadDisplay';
-
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCrown } from '@fortawesome/free-solid-svg-icons';
 
 export interface GameLandingProps {
     user: User,
     gameToken: string,
 }
 
+interface StoredPlayer {
+    name: string,
+    host: boolean,
+}
+
 export const GameLanding = function(props: GameLandingProps): React.ReactElement {
-    const [comms, setComms] = useState(null);
+    const [comms, setComms] = useState(null as Comms);
+    const [players, setPlayers] = useState([] as StoredPlayer[]);
+    
+    comms?.addConnectListener('GameLandingConnect', msg => {
+        const player = { name: msg.Connect.username, host: msg.Connect.host };
+        for (const existing of players) {
+            if (existing.name == player.name) {
+                return;
+            }
+        }
+
+        if (player.host) {
+            setPlayers([player].concat(players));
+        } else {
+            setPlayers(players.concat([player]));
+        }
+    });
 
     return (
         <div style={{display: 'flex', flex: 1}}>
@@ -22,7 +44,18 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
                 <GameStage comms={comms} />
             </div>
             <div style={{flex: 1, flexDirection: 'row', height: '90%'}}>
+                <img src="/static/favicon-128.png" />
                 {comms ? <Greeting user={props.user} /> : <LoadDisplay />}
+                <div style={{paddingTop: '1em'}}>
+                    {players.map(player => (
+                        <div className="PlayerName" key={player.name}>
+                            {player.host
+                                ? (<FontAwesomeIcon style={{ paddingLeft: '0.5em', paddingRight: '0.5em' }} icon={faCrown} />)
+                                : (<span style={{ paddingLeft: '0.75em', paddingRight: '1.25em' }}>-</span>)}
+                            {player.name}
+                        </div>
+                    ))}
+                </div>
                 <CommsComponent
                     user={props.user}
                     gameToken={props.gameToken}
