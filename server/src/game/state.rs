@@ -15,7 +15,7 @@ impl GameState {
             ProtocolMessage::PlaceToken { kind, x, y } => {
                 self.tokens.push(Token { kind, x, y });
             },
-            ProtocolMessage::Connect { .. } => {},
+            _ => {},
         }
     }
 

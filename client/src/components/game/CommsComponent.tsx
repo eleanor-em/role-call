@@ -19,15 +19,25 @@ export interface ConnectMessage {
     }
 }
 
+export interface FailedConnectionMessage {
+    FailedConnection: {
+        reason: string,
+    }
+}
+
 export class Comms {
     socket: W3cWebSocket;
     placeTokenListeners: Record<string, (msg: PlaceTokenMessage) => void>;
     connectListeners: Record<string, (msg: ConnectMessage) => void>;
+    failedListeners: Record<string, (msg: FailedConnectionMessage) => void>;
+    failed: boolean;
 
     constructor(socket: W3cWebSocket, props: CommsProps) {
         this.socket = socket;
         this.placeTokenListeners = {};
         this.connectListeners = {};
+        this.failedListeners = {};
+        this.failed = false;
 
         socket.onopen = () => {
             props.onConnect(this);
@@ -36,7 +46,7 @@ export class Comms {
         };
 
         socket.onclose = () => {
-            if (confirm('Warning: game has been disconnected. Refresh the page?')) {
+            if (!this.failed && confirm('Warning: game has been disconnected. Refresh the page?')) {
                 window.location.reload();
             }
         };
@@ -52,6 +62,12 @@ export class Comms {
                 case 'Connect': {
                     data.Connect.kind = TokenType[data.Connect.kind];
                     Object.values(this.connectListeners).forEach(op => op(data));
+                    break;
+                }
+                case 'FailedConnection': {
+                    this.failed = true;
+                    data.FailedConnection.kind = TokenType[data.FailedConnection.kind];
+                    Object.values(this.failedListeners).forEach(op => op(data));
                     break;
                 }
             }
@@ -71,6 +87,10 @@ export class Comms {
 
     addConnectListener(ref: string, listener: ((msg: ConnectMessage) => void)): void {
         this.connectListeners[ref] = listener;
+    }
+
+    addFailedListener(ref: string, listener: ((msg: FailedConnectionMessage) => void)): void {
+        this.failedListeners[ref] = listener;
     }
 }
 

@@ -30,13 +30,18 @@ body {
     padding: 1em;
 }
 
+.HeadlineImage {
+    padding-right: 1em;
+}
+
 .Title {
     font-size: 28pt;
-    padding-left: 1em;
+    padding-left: 0.5em;
     font-weight: bold;
     display: flex;
     text-align: left;
     justify-content: left;
+    align-items: center;
 }
 
 .Greeting {

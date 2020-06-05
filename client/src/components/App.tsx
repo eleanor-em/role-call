@@ -72,7 +72,7 @@ export const App = function(): React.ReactElement {
         <div className="App">
             <header className="AppHeader">
                 <p>
-                    <span className="Title">RoleCall</span>
+                    <span className="Title"><img className="HeadlineImage" src="/static/favicon-128.png" />RoleCall</span>
                     <Greeting user={user} />
                 </p>
             </header>

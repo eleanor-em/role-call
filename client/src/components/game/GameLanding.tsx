@@ -22,6 +22,7 @@ interface StoredPlayer {
 export const GameLanding = function(props: GameLandingProps): React.ReactElement {
     const [comms, setComms] = useState(null as Comms);
     const [players, setPlayers] = useState([] as StoredPlayer[]);
+    const [failed, setFailed] = useState('');
     
     comms?.addConnectListener('GameLandingConnect', msg => {
         const player = { name: msg.Connect.username, host: msg.Connect.host };
@@ -38,29 +39,44 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
         }
     });
 
-    return (
+    comms?.addFailedListener('GameLandingFailed', msg => {
+        alert(`Failed to connect to game: ${msg.FailedConnection.reason}`);
+        setFailed(msg.FailedConnection.reason);
+    });
+
+    const playerList = (
+        <div style={{paddingTop: '1em'}}>
+            {players.map(player => (
+                <div className="PlayerName" key={player.name}>
+                    {player.host
+                        ? (<FontAwesomeIcon style={{ paddingLeft: '0.5em', paddingRight: '0.5em' }} icon={faCrown} />)
+                        : (<span style={{ paddingLeft: '0.75em', paddingRight: '1.25em' }}>-</span>)}
+                    {player.name}
+                </div>
+            ))}
+        </div>
+    );
+
+    return failed ? (
+        <div style={{flex: 1, flexDirection: 'row', height: '90%'}}>
+            <img src="/static/favicon-128.png" /> <br/>
+            Failed to connect to game: {failed}. <br/>
+            <a href="/">Go back home</a>
+        </div>
+    ) : (
         <div style={{display: 'flex', flex: 1}}>
+            <CommsComponent
+                user={props.user}
+                gameToken={props.gameToken}
+                onConnect={setComms}
+            />
             <div className="GameContainer">
                 <GameStage comms={comms} />
             </div>
             <div style={{flex: 1, flexDirection: 'row', height: '90%'}}>
-                <img src="/static/favicon-128.png" />
+                <a href="/"><img src="/static/favicon-128.png" /></a>
                 {comms ? <Greeting user={props.user} /> : <LoadDisplay />}
-                <div style={{paddingTop: '1em'}}>
-                    {players.map(player => (
-                        <div className="PlayerName" key={player.name}>
-                            {player.host
-                                ? (<FontAwesomeIcon style={{ paddingLeft: '0.5em', paddingRight: '0.5em' }} icon={faCrown} />)
-                                : (<span style={{ paddingLeft: '0.75em', paddingRight: '1.25em' }}>-</span>)}
-                            {player.name}
-                        </div>
-                    ))}
-                </div>
-                <CommsComponent
-                    user={props.user}
-                    gameToken={props.gameToken}
-                    onConnect={setComms}
-                />
+                {playerList}
             </div>
         </div>
     );

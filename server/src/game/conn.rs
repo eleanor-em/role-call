@@ -11,6 +11,7 @@ use tokio_tungstenite::{tungstenite::Message, accept_async, tungstenite::Error a
 
 use crate::db::{DbManager, GamePermission};
 use crate::game::server::{connect_to_server, UserInfo};
+use crate::game::protocol::ProtocolMessage;
 
 #[derive(Debug)]
 pub enum GameError {
@@ -67,13 +68,18 @@ impl GameConnection {
         }
     }
 
-    async fn start(self, db: Arc<DbManager>) {
+    async fn start(mut self, db: Arc<DbManager>) {
         match db.check_game_permissions(&self.user_token, &self.game_token).await {
             Ok(GamePermission::None) => {
                 eprintln!("WS: failed game verification: user not in game");
             },
             Err(e) => {
                 eprintln!("WS: failed game verification: {}", e);
+                if let Err(e) = self.ws.send(ProtocolMessage::FailedConnection {
+                            reason: "could not find game".to_string()
+                        }.into_msg()).await {
+                    eprintln!("WS: failed to send error to client: {}", e);
+                }
             },
             Ok(perm) => {
                 // Load user information

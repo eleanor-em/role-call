@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum ProtocolMessage {
     PlaceToken { kind: String, x: i16, y: i16 },
     Connect { username: String, host: bool },
+    FailedConnection { reason: String },
 }
 
 impl ProtocolMessage {
