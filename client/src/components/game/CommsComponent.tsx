@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { w3cwebsocket as W3cWebSocket } from 'websocket';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { User } from '../../models/User';
-import { TokenType } from './util/TokenFactory';
+import { TokenType } from './TokenManager';
 
 export interface PlaceTokenMessage {
     PlaceToken: {

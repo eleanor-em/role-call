@@ -1,38 +1,8 @@
 import * as React from 'react';
 import '../../css/App.css';
-import { Stage, Layer, Line } from 'react-konva';
 import { useState, useEffect } from 'react';
-import { TokenFactory, TokenType } from './util/TokenFactory';
 import { Comms } from './CommsComponent';
-import { TokenLayer } from './TokenLayer';
-
-function generateGrid(gridWidth: number, gridHeight: number, cellSize: number, topLeft: Point): React.ReactElement[] {
-    const x0 = -cellSize + topLeft.x % cellSize;
-    const y0 = -cellSize + topLeft.y % cellSize;
-    const lines = [];
-
-    // vertical lines
-    for (let x = x0 + cellSize; x < gridWidth; x += cellSize) {
-        lines.push((<Line
-            points={[x, 0, x, gridHeight]}
-            stroke={'white'}
-            strokeWidth={1}
-            dash={[5, 3]}
-            key={`x${x}`}
-        />));
-    }
-    // horizontal lines
-    for (let y = cellSize + y0; y < gridHeight; y += cellSize) {
-        lines.push((<Line
-            points={[0, y, gridWidth, y]}
-            stroke={'white'}
-            strokeWidth={1}
-            dash={[5, 3]}
-            key={`y${y}`}
-        />));
-    }
-    return lines;
-}
+import { TokenManager, TokenType, drawToken } from './TokenManager';
 
 export interface Point {
     x: number,
@@ -43,54 +13,140 @@ export interface GameStageProps {
     comms: Comms,
 }
 
+export class Renderer {
+    // 5 / 6 due to flex in CSS
+    width = window.innerWidth * 5 / 6;
+    height = window.innerHeight * 0.95;
+    cellSize = 64;
+    renderListeners: Record<string, (ctx: CanvasRenderingContext2D, cellSize: number) => void>;
+
+    constructor() {
+        this.renderListeners = {};
+    }
+
+    // Listeners should use a unique reference string, to prevent duplicate listeners.
+    addRenderListener(ref: string, listener: ((ctx: CanvasRenderingContext2D, cellSize: number) => void)): void {
+        this.renderListeners[ref] = listener;
+    }
+
+    snapToGrid(x: number, y: number): Point {
+        x = Math.floor(x / this.cellSize) * this.cellSize;
+        y = Math.floor(y / this.cellSize) * this.cellSize;
+        return { x, y };
+    }
+
+    render(translation: Point, scale: number): void {
+        console.log('render');
+        const canvas = document.getElementById('stage') as HTMLCanvasElement;
+        const ctx = canvas.getContext('2d');
+
+        // Handle transforms
+        ctx.resetTransform();
+        ctx.clearRect(0, 0, this.width, this.height);
+        ctx.setTransform(scale, 0, 0, scale, translation.x, translation.y);
+        
+        // Draw content
+        this.renderGrid(ctx, translation, scale);
+        Object.values(this.renderListeners).forEach(op => op(ctx, this.cellSize));
+    }
+
+    renderGrid(ctx: CanvasRenderingContext2D, translation: Point, scale: number): void {
+        // Ensure we cover the entire screen if it has been translated
+        const x0 = Math.ceil(Math.abs(translation.x / scale / this.cellSize)) * this.cellSize;
+        const y0 = Math.ceil(Math.abs(translation.y / scale / this.cellSize)) * this.cellSize;
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'white';
+
+        ctx.beginPath();
+        // vertical lines
+        for (let x = this.cellSize - x0; x < this.width / scale + x0; x += this.cellSize) {
+            ctx.moveTo(x, -y0);
+            ctx.lineTo(x, this.height / scale + y0);
+        }
+
+        // horizontal lines
+        for (let y = this.cellSize - y0; y < this.height / scale + y0; y += this.cellSize) {
+            ctx.moveTo(-x0, y);
+            ctx.lineTo(this.width / scale + x0, y);
+        }
+        ctx.closePath();
+        
+        ctx.stroke();
+    }
+}
+
+const renderer = new Renderer();
+
 export function GameStage(props: GameStageProps): React.ReactElement {
     const [selected, setSelected] = useState(TokenType.None);
     const [prevSelected, setPrevSelected] = useState(TokenType.None);
+
+    const [mouseAbsCoord, setMouseAbsCoord] = useState({ x: 0, y: 0 });
     const [mouseCoord, setMouseCoord] = useState({ x: 0, y: 0 });
+    const [mouseGridCoord, setMouseGridCoord] = useState({ x: 0, y: 0 });
+
     const [dragGrid, setDragGrid] = useState(false);
     const [cursor, setCursor] = useState('default');
-    const [topLeft, setTopLeft] = useState({ x: 0, y: 0 });
+
+    const [scaleCounter, setScaleCounter] = useState(0);
+    const [scale, setScale] = useState(1);
+    const [translation, setTranslation] = useState({ x: 0, y: 0 });
+
+    // Invert this flag to force a re-render despite useEffect tags
+    const [forceRender, setForceRender] = useState(false);
+    
+    const scaleFactor = 0.4;
 
     useEffect(() => {
         setSelected(TokenType.Circle);
     }, []);
+    
+    renderer.addRenderListener('SelectedPreview', (ctx, cellSize) => {
+        const { x, y } = renderer.snapToGrid(mouseCoord.x, mouseCoord.y);
+        drawToken(ctx, selected, x, y, cellSize);
+    });
 
-    // 5 / 6 due to flex in CSS
-    const width = window.innerWidth * 5 / 6;
-    const height = window.innerHeight * 0.95;
-    const cellSize = 64;
-    const grid = generateGrid(width, height, cellSize, topLeft);
-
-    const tokenFactory = new TokenFactory(cellSize);
 
     function handleMouseMove(ev: any): void {
-        const offsetX = ev.currentTarget.content.offsetLeft;
-        const offsetY = ev.currentTarget.content.offsetTop;
-        const x = ev.evt.clientX - offsetX;
-        const y = ev.evt.clientY - offsetY;
+        const bounds = ev.target.getBoundingClientRect();
+        const mx = ev.clientX - Math.round(bounds.left);
+        const my = ev.clientY - Math.round(bounds.top);
+        const x = Math.round((mx - translation.x) / scale);
+        const y = Math.round((my - translation.y) / scale);
+        // console.log(`(${x}, ${y})`);
 
         if (dragGrid) {
-            const nx = topLeft.x + x - mouseCoord.x;
-            const ny = topLeft.y + y - mouseCoord.y;
-            setTopLeft({ x: nx, y: ny });
+            const dx = mx - mouseAbsCoord.x;
+            const dy = my - mouseAbsCoord.y;
+            setTranslation({ x: translation.x + dx, y: translation.y + dy });
         }
         
-        if (x != mouseCoord.x || y != mouseCoord.y) {
-            setMouseCoord({ x, y });
+        setMouseAbsCoord({ x: mx, y: my });
+        setMouseCoord({ x, y });
+        const { x: gx, y: gy } = renderer.snapToGrid(x, y);
+        if (gx != mouseGridCoord.x || gy != mouseGridCoord.y) {
+            setMouseGridCoord({ x: gx, y: gy });
         }
     }
 
     function handleMouseDown(ev: any): void {
         // 0 is the left mouse button, 1 is the middle mouse button
-        if (ev.evt.button == 0) {
-            if (ev.evt.shiftKey) {
+        if (ev.button == 0) {
+            if (ev.shiftKey) {
                 onDragStart();
+            } else if (ev.ctrlKey) {
+                setScaleCounter(scaleCounter + 1);
+                setScale(Math.exp((scaleCounter + 1) * scaleFactor));
             } else if (selected != TokenType.None) {
-                const { x, y } = snapToGrid(mouseCoord.x, mouseCoord.y);
-                props.comms?.placeToken(selected, x - topLeft.x, y - topLeft.y);
+                const { x, y } = renderer.snapToGrid(mouseCoord.x - translation.x, mouseCoord.y - translation.y);
+                props.comms?.placeToken(selected, x, y);
             }
-        } else if (ev.evt.button == 1) {
+        } else if (ev.button == 1) {
             onDragStart();
+        } else if (ev.button == 2 && ev.ctrlKey) {
+            setScaleCounter(scaleCounter - 1);
+            setScale(Math.exp((scaleCounter - 1) * scaleFactor));
         }
     }
 
@@ -105,7 +161,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         setCursor('default');
         setPrevSelected(TokenType.None);
         setSelected(prevSelected);
-        setDragGrid(false);        
+        setDragGrid(false);
+        setForceRender(!forceRender);
     }
 
     function handleMouseUp(_: any): void {
@@ -120,39 +177,26 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         }
     }
 
-    function snapToGrid(x: number, y: number): Point {
-        x = Math.floor((x - topLeft.x) / cellSize) * cellSize + topLeft.x;
-        y = Math.floor((y - topLeft.y) / cellSize) * cellSize + topLeft.y;
-        return { x, y };
-    }
 
-    const { x, y } = snapToGrid(mouseCoord.x, mouseCoord.y);
-    const token = tokenFactory.make(selected, x, y);
+    useEffect(() => {
+        renderer.render(translation, scale);
+    }, [translation, mouseGridCoord, scale, forceRender]);
+
 
     return (
-        <Stage
-            width={width}
-            height={height}
-            onMouseMove={handleMouseMove}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
-            style={{ cursor, border: '1px solid white' }}>
-            <Layer>
-                {grid}
-            </Layer>
-            <TokenLayer
+        <>
+            <canvas id="stage" width={renderer.width} height={renderer.height}
+                onMouseMove={handleMouseMove}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+                onContextMenu={e => e.preventDefault()} // disable context menu
+                style={{ cursor, border: '1px solid white' }}
+            />
+            <TokenManager
                 comms={props.comms}
-                tokenFactory={tokenFactory}
-                topLeft={topLeft}
-                width={width}
-                height={height}
-                cellSize={cellSize}/>
-            {(
-                <Layer>
-                    {token}
-                </Layer>
-            )}
-        </Stage>
+                renderer={renderer}
+            />
+        </>
     );
 }

@@ -35,11 +35,9 @@
     "@types/dotenv": "^8.2.0",
     "dotenv": "^8.2.0",
     "dotenv-webpack": "^1.8.0",
-    "konva": "^6.0.0",
     "react": "^16.13.1",
     "react-cookie": "^4.0.3",
     "react-dom": "^16.13.1",
-    "react-konva": "^16.13.0-3",
     "websocket": "^1.0.31"
   }
 }
