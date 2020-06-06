@@ -315,11 +315,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
 
     function updateCursor(mods: { ctrl: boolean, alt: boolean, shift: boolean }): void {
-        if (!mods) {
-            mods = modifiers;
-        }
         if (hoverCanvas) {
-            if (mods.shift) {
+            if (mods.shift || dragGrid) {
                 startHideToken();
                 setCursor('move');
             } else if (mods.ctrl) {
@@ -331,6 +328,9 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             }
         }
     }
+
+    // useEffect to ensure the cursor updates after finishing drag
+    useEffect(() => updateCursor(modifiers), [dragGrid]);
 
     document.body.onkeydown = handleKeyDown;
     document.body.onkeyup = handleKeyUp;
