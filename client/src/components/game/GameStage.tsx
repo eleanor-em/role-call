@@ -58,7 +58,7 @@ export class Renderer {
         return { x, y };
     }
 
-    render(translation: Point, scale: number, zoomOffset: Point): void {
+    render(translation: Point, scale: number): void {
         console.log('render');
         const canvas = document.getElementById('stage') as HTMLCanvasElement;
         const ctx = canvas.getContext('2d');
@@ -66,7 +66,6 @@ export class Renderer {
         // Handle transforms
         ctx.resetTransform();
         ctx.clearRect(0, 0, this.width, this.height);
-
         ctx.setTransform(scale, 0, 0, scale, translation.x, translation.y);
         this.matrix = ctx.getTransform();
         
@@ -110,24 +109,32 @@ const renderer = new Renderer();
 export function GameStage(props: GameStageProps): React.ReactElement {
     const [selected, setSelected] = useState(TokenType.None);
     const [prevSelected, setPrevSelected] = useState(TokenType.None);
-
-    // mouseAbsCoord: the untransformed coordinate of the mouse
-    // relative to the canvas
-    const [mouseAbsCoord, setMouseAbsCoord] = useState({ x: 0, y: 0 });
-    // mouseGridCoord: the transformed coordinate of the mouse, snapped to the grid
-    const [mouseGridCoord, setMouseGridCoord] = useState({ x: 0, y: 0 });
-    // zoomOffset: the position last zoomed in/out
-    const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
-
-    const [dragGrid, setDragGrid] = useState(false);
+    const [hideToken, setHideToken] = useState(false);
     const [cursor, setCursor] = useState('default');
 
+    // mouseCoord: the untransformed coordinate of the mouse
+    // relative to the canvas
+    const [mouseCoord, setMouseCoord] = useState({ x: 0, y: 0 });
+    // mouseGridCoord: the transformed coordinate of the mouse, snapped to the grid
+    const [mouseGridCoord, setMouseGridCoord] = useState({ x: 0, y: 0 });
+
+    const [dragGrid, setDragGrid] = useState(false);
     const [scaleCounter, setScaleCounter] = useState(0);
     const [scale, setScale] = useState(1);
     const [translation, setTranslation] = useState({ x: 0, y: 0 });
 
+    const [modifiers, setModifiers] = useState({
+        ctrl: false,
+        alt: false,
+        shift: false,
+    });
+    const [hoverCanvas, setHoverCanvas] = useState(false);
+
     // Invert this flag to force a re-render despite useEffect tags
-    const [forceRender, setForceRender] = useState(false);
+    const [forceRenderFlag, setForceRender] = useState(false);
+    function forceRender() {
+        setForceRender(!forceRenderFlag);
+    }
     
     const scaleFactor = 0.4;
 
@@ -136,25 +143,30 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }, []);
     
     renderer.addRenderListener('SelectedPreview', (ctx, cellSize) => {
-        const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseAbsCoord));
-        drawToken(ctx, selected, x, y, cellSize);
+        const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseCoord));
+        if (!modifiers.shift && !modifiers.ctrl) {
+            drawToken(ctx, selected, x, y, cellSize);
+        }
     });
 
 
     function handleMouseMove(ev: any): void {
+        // setHoverCanvas(true);
+        handleMouseEnter(ev);
+
         const bounds = ev.target.getBoundingClientRect();
         const mx = ev.clientX - Math.round(bounds.left);
         const my = ev.clientY - Math.round(bounds.top);
 
         if (dragGrid) {
-            const dx = mx - mouseAbsCoord.x;
-            const dy = my - mouseAbsCoord.y;
+            const dx = mx - mouseCoord.x;
+            const dy = my - mouseCoord.y;
             setTranslation({ x: translation.x + dx, y: translation.y + dy });
         }
 
         const coord = { x: mx, y: my };
         
-        setMouseAbsCoord(coord);
+        setMouseCoord(coord);
         const { x, y } = renderer.snapToGrid(coord);
         if (x != mouseGridCoord.x || y != mouseGridCoord.y) {
             setMouseGridCoord({ x, y });
@@ -168,21 +180,21 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         const mouse = { x: mx, y: my };
         // 0 is the left mouse button, 1 is the middle mouse button, 2 is the right
         if (ev.button == 0) {
-            if (ev.shiftKey) {
-                onDragStart();
-            } else if (ev.ctrlKey) {
-                if (ev.altKey) {
+            if (modifiers.shift) {
+                setDragGrid(true);
+            } else if (modifiers.ctrl) {
+                if (modifiers.alt) {
                     onZoomOut(mouse);
                 } else {
                     onZoomIn(mouse);
                 }
             } else if (selected != TokenType.None) {
-                const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseAbsCoord));
+                const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseCoord));
                 props.comms?.placeToken(selected, x, y);
             }
         } else if (ev.button == 1) {
-            onDragStart();
-        } else if (ev.button == 2 && ev.ctrlKey) {
+            setDragGrid(true);
+        } else if (ev.button == 2 && modifiers.ctrl) {
             onZoomOut(mouse);
         }
     }
@@ -204,36 +216,86 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         setScale(newScale);
 
         setTranslation({
-            x: mouse.x - (mouse.x - translation.x) * (newScale / scale),
-            y: mouse.y - (mouse.y - translation.y) * (newScale / scale),
+            x: mouse.x - (mouse.x - translation.x) * newScale / scale,
+            y: mouse.y - (mouse.y - translation.y) * newScale / scale,
         });
     }
 
-    function onDragStart() {
-        setCursor('move');
-        setPrevSelected(selected);
-        setSelected(TokenType.None);
-        setDragGrid(true);
+    function startHideToken() {
+        if (!hideToken) {
+            setPrevSelected(selected);
+            setSelected(TokenType.None);
+            setHideToken(true);
+            forceRender();
+        }
     }
 
-    function onDragEnd() {
-        setCursor('default');
-        setPrevSelected(TokenType.None);
-        setSelected(prevSelected);
-        setDragGrid(false);
-        setForceRender(!forceRender);
+    function endHideToken() {
+        if (hideToken) {
+            setPrevSelected(TokenType.None);
+            setSelected(prevSelected);
+            setHideToken(false);
+            forceRender();
+        }
     }
 
     function handleMouseUp(_: any): void {
-        if (dragGrid) {
-            onDragEnd();
-        }
+        setDragGrid(false);
     }
 
     function handleMouseLeave(_: any): void {
-        if (dragGrid) {
-            onDragEnd();
+        setDragGrid(false);
+        setCursor('default');
+        setHoverCanvas(false);
+    }
+
+    function handleMouseEnter(ev: any): void {
+        const mods = {
+            ctrl: ev.ctrlKey,
+            alt: ev.altKey,
+            shift: ev.shiftKey,
+        };
+        
+        if (mods.shift || mods.ctrl) {
+            startHideToken();
         }
+        updateCursor(mods);
+        setHoverCanvas(true);
+        setModifiers(mods);
+    }
+
+    function handleKeyDown(ev: any): void {
+        const mods = {...modifiers};
+        switch (ev.key) {
+            case 'Control':
+                mods.ctrl = true;
+                break;
+            case 'Alt':
+                mods.alt = true;
+                break;
+            case 'Shift':
+                mods.shift = true;
+                break;
+        }
+        updateCursor(mods);
+        setModifiers(mods);
+    }
+
+    function handleKeyUp(ev: any): void {
+        const mods = {...modifiers};
+        switch (ev.key) {
+            case 'Control':
+                mods.ctrl = false;
+                break;
+            case 'Alt':
+                mods.alt = false;
+                break;
+            case 'Shift':
+                mods.shift = false;
+                break;
+        }
+        updateCursor(mods);
+        setModifiers(mods);
     }
 
     function handleKeyPress(ev: any): void {
@@ -241,14 +303,42 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             setTranslation({ x: 0, y: 0 });
             setScale(1);
             setScaleCounter(0);
-            setZoomOffset({ x: 0, y: 0 });
         }
     }
 
+    function handleFocus(ev: any): void {
+        setModifiers({
+            ctrl: ev.ctrlKey,
+            alt: ev.altKey,
+            shift: ev.shiftKey,
+        });
+    }
+
+    function updateCursor(mods: { ctrl: boolean, alt: boolean, shift: boolean }): void {
+        if (!mods) {
+            mods = modifiers;
+        }
+        if (hoverCanvas) {
+            if (mods.shift) {
+                startHideToken();
+                setCursor('move');
+            } else if (mods.ctrl) {
+                startHideToken();
+                setCursor('zoom-in');
+            } else {
+                setCursor('default');
+                endHideToken();
+            }
+        }
+    }
+
+    document.body.onkeydown = handleKeyDown;
+    document.body.onkeyup = handleKeyUp;
     document.body.onkeypress = handleKeyPress;
+    document.body.onfocus = handleFocus;
 
     useEffect(() => {
-        renderer.render(translation, scale, zoomOffset);
+        renderer.render(translation, scale);
     }, [translation, mouseGridCoord, scale, forceRender]);
 
 
@@ -259,6 +349,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 onMouseDown={handleMouseDown}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseLeave}
+                onMouseEnter={handleMouseEnter}
                 onContextMenu={e => e.preventDefault()} // disable context menu
                 style={{ cursor, border: '1px solid white' }}
             />
