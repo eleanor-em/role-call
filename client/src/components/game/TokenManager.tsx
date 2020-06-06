@@ -49,6 +49,7 @@ export function TokenManager(props: TokenManagerProps): React.ReactElement {
     props.comms?.addPlaceTokenListener('TokenLayerAdd', addToken);
     props.renderer.addRenderListener('TokenManagerRender', (ctx, cellSize) => {
         for (const token of tokens) {
+            // const { x, y } = props.renderer.invTransform({ x: token.x, y: token.y });
             drawToken(ctx, token.kind, token.x, token.y, cellSize);
         }
     })

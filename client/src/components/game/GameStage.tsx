@@ -19,9 +19,32 @@ export class Renderer {
     height = window.innerHeight * 0.95;
     cellSize = 64;
     renderListeners: Record<string, (ctx: CanvasRenderingContext2D, cellSize: number) => void>;
+    matrix: DOMMatrix = null;
 
     constructor() {
         this.renderListeners = {};
+    }
+
+    invTransform(point: Point): Point {
+        const scale = this.matrix.a;
+        const transX = this.matrix.e;
+        const transY = this.matrix.f;
+        const result =  {
+            x: Math.round((point.x - transX) / scale),
+            y: Math.round((point.y - transY) / scale),
+        };
+        return result;
+    }
+
+    transform(point: Point): Point {
+        const scale = this.matrix.a;
+        const transX = this.matrix.e;
+        const transY = this.matrix.f;
+        const result =  {
+            x: Math.round(point.x * scale + transX),
+            y: Math.round(point.y * scale + transY),
+        };
+        return result;
     }
 
     // Listeners should use a unique reference string, to prevent duplicate listeners.
@@ -29,13 +52,13 @@ export class Renderer {
         this.renderListeners[ref] = listener;
     }
 
-    snapToGrid(x: number, y: number): Point {
-        x = Math.floor(x / this.cellSize) * this.cellSize;
-        y = Math.floor(y / this.cellSize) * this.cellSize;
+    snapToGrid(point: Point): Point {
+        const x = Math.floor(point.x / this.cellSize) * this.cellSize;
+        const y = Math.floor(point.y / this.cellSize) * this.cellSize;
         return { x, y };
     }
 
-    render(translation: Point, scale: number): void {
+    render(translation: Point, scale: number, zoomOffset: Point): void {
         console.log('render');
         const canvas = document.getElementById('stage') as HTMLCanvasElement;
         const ctx = canvas.getContext('2d');
@@ -43,17 +66,23 @@ export class Renderer {
         // Handle transforms
         ctx.resetTransform();
         ctx.clearRect(0, 0, this.width, this.height);
+
         ctx.setTransform(scale, 0, 0, scale, translation.x, translation.y);
+        this.matrix = ctx.getTransform();
         
         // Draw content
-        this.renderGrid(ctx, translation, scale);
+        this.renderGrid(ctx);
         Object.values(this.renderListeners).forEach(op => op(ctx, this.cellSize));
     }
 
-    renderGrid(ctx: CanvasRenderingContext2D, translation: Point, scale: number): void {
+    renderGrid(ctx: CanvasRenderingContext2D): void {
+        const transform = ctx.getTransform();
+        const scale = transform.a;
+        const transX = transform.e;
+        const transY = transform.f;
         // Ensure we cover the entire screen if it has been translated
-        const x0 = Math.ceil(Math.abs(translation.x / scale / this.cellSize)) * this.cellSize;
-        const y0 = Math.ceil(Math.abs(translation.y / scale / this.cellSize)) * this.cellSize;
+        const x0 = Math.ceil(Math.abs(transX / scale / this.cellSize)) * this.cellSize;
+        const y0 = Math.ceil(Math.abs(transY / scale / this.cellSize)) * this.cellSize;
 
         ctx.lineWidth = 1;
         ctx.strokeStyle = 'white';
@@ -85,10 +114,10 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     // mouseAbsCoord: the untransformed coordinate of the mouse
     // relative to the canvas
     const [mouseAbsCoord, setMouseAbsCoord] = useState({ x: 0, y: 0 });
-    // mouseCoord: the transformed coordinate of the mouse in the grid's coordinates
-    const [mouseCoord, setMouseCoord] = useState({ x: 0, y: 0 });
     // mouseGridCoord: the transformed coordinate of the mouse, snapped to the grid
     const [mouseGridCoord, setMouseGridCoord] = useState({ x: 0, y: 0 });
+    // zoomOffset: the position last zoomed in/out
+    const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
 
     const [dragGrid, setDragGrid] = useState(false);
     const [cursor, setCursor] = useState('default');
@@ -107,7 +136,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }, []);
     
     renderer.addRenderListener('SelectedPreview', (ctx, cellSize) => {
-        const { x, y } = renderer.snapToGrid(mouseCoord.x, mouseCoord.y);
+        const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseAbsCoord));
         drawToken(ctx, selected, x, y, cellSize);
     });
 
@@ -116,42 +145,68 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         const bounds = ev.target.getBoundingClientRect();
         const mx = ev.clientX - Math.round(bounds.left);
         const my = ev.clientY - Math.round(bounds.top);
-        const x = Math.round((mx - translation.x) / scale);
-        const y = Math.round((my - translation.y) / scale);
-        // console.log(`(${x}, ${y})`);
 
         if (dragGrid) {
             const dx = mx - mouseAbsCoord.x;
             const dy = my - mouseAbsCoord.y;
             setTranslation({ x: translation.x + dx, y: translation.y + dy });
         }
+
+        const coord = { x: mx, y: my };
         
-        setMouseAbsCoord({ x: mx, y: my });
-        setMouseCoord({ x, y });
-        const { x: gx, y: gy } = renderer.snapToGrid(x, y);
-        if (gx != mouseGridCoord.x || gy != mouseGridCoord.y) {
-            setMouseGridCoord({ x: gx, y: gy });
+        setMouseAbsCoord(coord);
+        const { x, y } = renderer.snapToGrid(coord);
+        if (x != mouseGridCoord.x || y != mouseGridCoord.y) {
+            setMouseGridCoord({ x, y });
         }
     }
 
     function handleMouseDown(ev: any): void {
+        const bounds = ev.target.getBoundingClientRect();
+        const mx = ev.clientX - Math.round(bounds.left);
+        const my = ev.clientY - Math.round(bounds.top);
+        const mouse = { x: mx, y: my };
         // 0 is the left mouse button, 1 is the middle mouse button, 2 is the right
         if (ev.button == 0) {
             if (ev.shiftKey) {
                 onDragStart();
             } else if (ev.ctrlKey) {
-                setScaleCounter(scaleCounter + 1);
-                setScale(Math.exp((scaleCounter + 1) * scaleFactor));
+                if (ev.altKey) {
+                    onZoomOut(mouse);
+                } else {
+                    onZoomIn(mouse);
+                }
             } else if (selected != TokenType.None) {
-                const { x, y } = renderer.snapToGrid(mouseCoord.x, mouseCoord.y);
+                const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseAbsCoord));
                 props.comms?.placeToken(selected, x, y);
             }
         } else if (ev.button == 1) {
             onDragStart();
         } else if (ev.button == 2 && ev.ctrlKey) {
-            setScaleCounter(scaleCounter - 1);
-            setScale(Math.exp((scaleCounter - 1) * scaleFactor));
+            onZoomOut(mouse);
         }
+    }
+
+    function onZoomIn(mouse: Point) {
+        const newScale = Math.exp((scaleCounter + 1) * scaleFactor);
+        setScaleCounter(scaleCounter + 1);
+        setScale(newScale);
+
+        setTranslation({
+            x: mouse.x - (mouse.x - translation.x) * newScale / scale,
+            y: mouse.y - (mouse.y - translation.y) * newScale / scale,
+        });
+    }
+
+    function onZoomOut(mouse: Point) {
+        const newScale = Math.exp((scaleCounter - 1) * scaleFactor);
+        setScaleCounter(scaleCounter - 1);
+        setScale(newScale);
+
+        setTranslation({
+            x: mouse.x - (mouse.x - translation.x) * (newScale / scale),
+            y: mouse.y - (mouse.y - translation.y) * (newScale / scale),
+        });
     }
 
     function onDragStart() {
@@ -181,9 +236,19 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         }
     }
 
+    function handleKeyPress(ev: any): void {
+        if (ev.key == ' ') {
+            setTranslation({ x: 0, y: 0 });
+            setScale(1);
+            setScaleCounter(0);
+            setZoomOffset({ x: 0, y: 0 });
+        }
+    }
+
+    document.body.onkeypress = handleKeyPress;
 
     useEffect(() => {
-        renderer.render(translation, scale);
+        renderer.render(translation, scale, zoomOffset);
     }, [translation, mouseGridCoord, scale, forceRender]);
 
 
