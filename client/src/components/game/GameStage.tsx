@@ -82,8 +82,12 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     const [selected, setSelected] = useState(TokenType.None);
     const [prevSelected, setPrevSelected] = useState(TokenType.None);
 
+    // mouseAbsCoord: the untransformed coordinate of the mouse
+    // relative to the canvas
     const [mouseAbsCoord, setMouseAbsCoord] = useState({ x: 0, y: 0 });
+    // mouseCoord: the transformed coordinate of the mouse in the grid's coordinates
     const [mouseCoord, setMouseCoord] = useState({ x: 0, y: 0 });
+    // mouseGridCoord: the transformed coordinate of the mouse, snapped to the grid
     const [mouseGridCoord, setMouseGridCoord] = useState({ x: 0, y: 0 });
 
     const [dragGrid, setDragGrid] = useState(false);
@@ -131,7 +135,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
 
     function handleMouseDown(ev: any): void {
-        // 0 is the left mouse button, 1 is the middle mouse button
+        // 0 is the left mouse button, 1 is the middle mouse button, 2 is the right
         if (ev.button == 0) {
             if (ev.shiftKey) {
                 onDragStart();
@@ -139,7 +143,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 setScaleCounter(scaleCounter + 1);
                 setScale(Math.exp((scaleCounter + 1) * scaleFactor));
             } else if (selected != TokenType.None) {
-                const { x, y } = renderer.snapToGrid(mouseCoord.x - translation.x, mouseCoord.y - translation.y);
+                const { x, y } = renderer.snapToGrid(mouseCoord.x, mouseCoord.y);
                 props.comms?.placeToken(selected, x, y);
             }
         } else if (ev.button == 1) {
