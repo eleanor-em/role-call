@@ -23,6 +23,10 @@ export class Renderer {
 
     constructor() {
         this.renderListeners = {};
+        useEffect(() => {
+            this.width = window.innerWidth * 5 / 6;
+            this.height = window.innerHeight * 0.95;
+        }, [window.innerWidth, window.innerHeight]);
     }
 
     invTransform(point: Point): Point {
@@ -104,9 +108,10 @@ export class Renderer {
     }
 }
 
-const renderer = new Renderer();
 
 export function GameStage(props: GameStageProps): React.ReactElement {
+    const renderer = new Renderer();
+
     const [selected, setSelected] = useState(TokenType.None);
     const [prevSelected, setPrevSelected] = useState(TokenType.None);
     const [hideToken, setHideToken] = useState(false);
@@ -136,8 +141,6 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         setForceRender(!forceRenderFlag);
     }
     
-    const scaleFactor = 0.4;
-
     useEffect(() => {
         setSelected(TokenType.Circle);
     }, []);
@@ -184,9 +187,10 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 setDragGrid(true);
             } else if (modifiers.ctrl) {
                 if (modifiers.alt) {
-                    onZoomOut(mouse);
+                    // larger modifier for click zooming
+                    onZoomOut(mouse, 0.4);
                 } else {
-                    onZoomIn(mouse);
+                    onZoomIn(mouse, 0.4);
                 }
             } else if (selected != TokenType.None) {
                 const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseCoord));
@@ -195,12 +199,12 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         } else if (ev.button == 1) {
             setDragGrid(true);
         } else if (ev.button == 2 && modifiers.ctrl) {
-            onZoomOut(mouse);
+            onZoomOut(mouse, 0.4);
         }
     }
 
-    function onZoomIn(mouse: Point) {
-        const newScale = Math.exp((scaleCounter + 1) * scaleFactor);
+    function onZoomIn(mouse: Point, scaleFactor: number) {
+        const newScale = scale * Math.exp(scaleFactor);
         setScaleCounter(scaleCounter + 1);
         setScale(newScale);
 
@@ -210,8 +214,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         });
     }
 
-    function onZoomOut(mouse: Point) {
-        const newScale = Math.exp((scaleCounter - 1) * scaleFactor);
+    function onZoomOut(mouse: Point, scaleFactor: number) {
+        const newScale = scale / Math.exp(scaleFactor);
         setScaleCounter(scaleCounter - 1);
         setScale(newScale);
 
@@ -314,6 +318,15 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         });
     }
 
+    function handleOnWheel(ev: any): void {
+        ev.preventDefault();
+        if (ev.deltaY < 0) {
+            onZoomIn(mouseCoord, 0.1);
+        } else {
+            onZoomOut(mouseCoord, 0.1);
+        }
+    }
+
     function updateCursor(mods: { ctrl: boolean, alt: boolean, shift: boolean }): void {
         if (hoverCanvas) {
             if (mods.shift || dragGrid) {
@@ -350,6 +363,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseLeave}
                 onMouseEnter={handleMouseEnter}
+                onWheel={handleOnWheel}
                 onContextMenu={e => e.preventDefault()} // disable context menu
                 style={{ cursor, border: '1px solid white' }}
             />

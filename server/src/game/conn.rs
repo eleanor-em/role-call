@@ -97,7 +97,7 @@ impl GameConnection {
                             info!("verified connection");
                             while let Some(result) = reader.next().await {
                                 match result {
-                                    Ok(result) => server.recv(result).await,
+                                    Ok(result) => server.recv(result, user.is_host).await,
                                     Err(e) => warn!("error running connection: {}", e),
                                 }
                             }

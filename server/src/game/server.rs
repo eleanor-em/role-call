@@ -97,7 +97,7 @@ impl Server {
         self.recv(ProtocolMessage::Connect {
             username: user.username,
             host: user.is_host,
-        }.into()).await;
+        }.into(), user.is_host).await;
     }
 
     pub fn close_client(&self, user: UserInfo) {
@@ -117,20 +117,33 @@ impl Server {
         }
     }
 
-    pub async fn recv(&self, msg: Message) {
+    fn authorised(&self, msg: &ProtocolMessage, from_host: bool) -> bool {
+        match msg {
+            ProtocolMessage::PlaceToken { .. } => { from_host },
+            ProtocolMessage::Connect { .. } |
+            ProtocolMessage::Disconnect { .. } |
+            ProtocolMessage::FailedConnection { .. } => { true},
+        }
+    }
+
+    pub async fn recv(&self, msg: Message, from_host: bool) {
         if let Ok(text) = msg.to_text() {
             if let Ok(parsed) = serde_json::from_str::<ProtocolMessage>(&text) {
-                {
-                    let mut state = self.state.lock().unwrap();
-                    state.process(parsed);
-                }
-
-                info!("sending: {}", text);
-                let clients = self.clients.pin();
-                for tx in clients.values() {
-                    if let Err(e) = tx.send(text.to_string()) {
-                        warn!("failed writing: {}", e);
+                if self.authorised(&parsed, from_host) {
+                    {
+                        let mut state = self.state.lock().unwrap();
+                        state.process(parsed);
                     }
+
+                    info!("sending: {}", text);
+                    let clients = self.clients.pin();
+                    for tx in clients.values() {
+                        if let Err(e) = tx.send(text.to_string()) {
+                            warn!("failed writing: {}", e);
+                        }
+                    }
+                } else {
+                    warn!("unauthorised message from non-host");
                 }
             } else {
                 warn!("malformed message: {}", text);
