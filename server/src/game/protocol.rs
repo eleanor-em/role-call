@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 // TODO: refactor PlaceToken to have a Token
 pub enum ProtocolMessage {
-    PlaceToken { kind: String, x: i16, y: i16 },
+    PlaceToken { kind: String, x: i16, y: i16, colour: String, },
     Connect { username: String, host: bool },
     Disconnect { username: String },
     FailedConnection { reason: String },
@@ -32,6 +32,7 @@ pub struct Token {
     pub kind: String,
     pub x: i16,
     pub y: i16,
+    pub colour: String,
 }
 
 impl Token {
@@ -39,7 +40,8 @@ impl Token {
         ProtocolMessage::PlaceToken {
             kind: self.kind.clone(),
             x: self.x,
-            y: self.y
+            y: self.y,
+            colour: self.colour.clone(),
         }
     }
 }

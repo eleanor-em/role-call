@@ -4,11 +4,12 @@ import { useEffect } from 'react';
 import { User } from '../../models/User';
 import { TokenType } from './TokenManager';
 
-export interface PlaceTokenMessage {
+export interface PlaceTokenMessage {    
     PlaceToken: {
         kind: TokenType,
         x: number,
-        y: number
+        y: number,
+        colour: string,
     }
 }
 
@@ -84,10 +85,11 @@ export class Comms {
         };
     }
 
-    placeToken(type: TokenType, x: number, y: number): void {
+    placeToken(type: TokenType, x: number, y: number, colour: string): void {
+        // Need to convert to name for transport
         const kind = TokenType[type];
         this.socket.send(JSON.stringify({
-            PlaceToken: { kind, x, y }
+            PlaceToken: { kind, x, y, colour }
         }));
     }
 

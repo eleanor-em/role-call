@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { LoadDisplay } from '../LoadDisplay';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCrown } from '@fortawesome/free-solid-svg-icons';
+import { Controls } from './Controls';
 
 export interface GameLandingProps {
     user: User,
@@ -24,9 +25,15 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
     const [comms, setComms] = useState(null as Comms);
     const [players, setPlayers] = useState([] as StoredPlayer[]);
     const [failed, setFailed] = useState('');
+    const [isHost, setIsHost] = useState(false);
+    const [tokenColour, setTokenColour] = useState('#ff0000');
     
     comms?.addConnectListener('GameLandingConnect', msg => {
         const player = { name: msg.Connect.username, host: msg.Connect.host };
+        if (player.name == props.user.username && player.host) {
+            setIsHost(true);
+        }
+
         for (const existing of players) {
             if (existing.name == player.name) {
                 return;
@@ -76,12 +83,17 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
                 onDisconnect={() => props.setMessage('Connection lost. Try reloading the page.')}
             />
             <div className="GameContainer">
-                <GameStage comms={comms} />
+                <GameStage comms={comms} tokenColour={tokenColour} />
             </div>
             <div className="GameSidebar">
-                <a href="/"><img src="/static/favicon-128.png" onClick={() => { if (comms) { comms.shouldShowRefresh = false; } }} /></a>
-                {comms ? <Greeting user={props.user} /> : <LoadDisplay />}
-                {playerList}
+                <div className="GameGreeting">
+                    <a href="/"><img src="/static/favicon-128.png" onClick={() => { if (comms) { comms.shouldShowRefresh = false; } }} /></a>
+                    {comms ? <Greeting user={props.user} /> : <LoadDisplay />}
+                    {playerList}
+                </div>
+                <div className="GameControls">
+                    {isHost && <Controls setTokenColour={setTokenColour}/>}
+                </div>
             </div>
         </div>
     );

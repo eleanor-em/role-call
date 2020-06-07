@@ -45,17 +45,6 @@ export const App = function(): React.ReactElement {
         }
     }
 
-    function getContents(): React.ReactElement {
-        switch (appState) {
-            case AppState.Login:
-                return (<Login loginCallback={login} />);
-            case AppState.Loading:
-                return (<LoadDisplay />);
-            case AppState.LoggedIn:
-                return (<Landing user={user} setMessage={setMessage} />);
-        }
-    }
-
     useEffect(() => {
         if ('session' in cookies) {
             const task = async () => {
@@ -77,6 +66,17 @@ export const App = function(): React.ReactElement {
             setAppState(AppState.Login);
         }
     }, []);
+
+    function getContents(): React.ReactElement {
+        switch (appState) {
+            case AppState.Login:
+                return (<Login loginCallback={login} />);
+            case AppState.Loading:
+                return (<LoadDisplay />);
+            case AppState.LoggedIn:
+                return (<Landing user={user} setMessage={setMessage} />);
+        }
+    }
 
     return (
         <div className="App">

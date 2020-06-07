@@ -11,12 +11,13 @@ export interface Point {
 
 export interface GameStageProps {
     comms: Comms,
+    tokenColour: string,
 }
 
 export class Renderer {
     // 5 / 6 due to flex in CSS
-    width = window.innerWidth * 5 / 6;
-    height = window.innerHeight * 0.95;
+    width = window.innerWidth * 4 / 5;
+    height = window.innerHeight * 0.96;
     cellSize = 64;
     renderListeners: Record<string, (ctx: CanvasRenderingContext2D, cellSize: number) => void>;
     matrix: DOMMatrix = null;
@@ -24,8 +25,8 @@ export class Renderer {
     constructor() {
         this.renderListeners = {};
         useEffect(() => {
-            this.width = window.innerWidth * 5 / 6;
-            this.height = window.innerHeight * 0.95;
+            this.width = window.innerWidth * 4 / 5;
+            this.height = window.innerHeight * 0.96;
         }, [window.innerWidth, window.innerHeight]);
     }
 
@@ -53,6 +54,7 @@ export class Renderer {
 
     // Listeners should use a unique reference string, to prevent duplicate listeners.
     addRenderListener(ref: string, listener: ((ctx: CanvasRenderingContext2D, cellSize: number) => void)): void {
+        // TODO: sort by depth
         this.renderListeners[ref] = listener;
     }
 
@@ -142,16 +144,15 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
     
     useEffect(() => {
-        setSelected(TokenType.Circle);
+        setSelected(TokenType.Diamond);
     }, []);
     
     renderer.addRenderListener('SelectedPreview', (ctx, cellSize) => {
         const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseCoord));
         if (!modifiers.shift && !modifiers.ctrl) {
-            drawToken(ctx, selected, x, y, cellSize);
+            drawToken(ctx, selected, x, y, cellSize, props.tokenColour);
         }
     });
-
 
     function handleMouseMove(ev: any): void {
         // setHoverCanvas(true);
@@ -194,7 +195,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 }
             } else if (selected != TokenType.None) {
                 const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseCoord));
-                props.comms?.placeToken(selected, x, y);
+                props.comms?.placeToken(selected, x, y, props.tokenColour);
             }
         } else if (ev.button == 1) {
             setDragGrid(true);
@@ -248,6 +249,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
 
     function handleMouseLeave(_: any): void {
+        startHideToken();
         setDragGrid(false);
         setCursor('default');
         setHoverCanvas(false);
@@ -259,7 +261,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             alt: ev.altKey,
             shift: ev.shiftKey,
         };
-        
+
+        endHideToken();
         if (mods.shift || mods.ctrl) {
             startHideToken();
         }

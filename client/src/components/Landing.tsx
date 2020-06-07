@@ -41,7 +41,7 @@ export const Landing = function(props: LandingProps): React.ReactElement {
 
     return (
         <div className="Content">
-            <p>
+            <div className="TabContainer">
                 {Object.keys(tabTitles).map(key => {
                     const i = parseInt(key);
                     return (
@@ -49,21 +49,20 @@ export const Landing = function(props: LandingProps): React.ReactElement {
                             <span className={tabClasses[i]} onClick={() => setSelectedTab(i)}>
                                 {tabTitles[i]}
                             </span>
-                            <span>
-                                {(i + 1 < tabTitles.length) && ' | '}
-                            </span>
                         </span>
                     );
                 })}
-            </p>
-            {selectedTab == 0 && (<HostedGames user={props.user} games={games} />)}
-            {selectedTab == 2 && (
-                <CreateGame
-                    user={props.user}
-                    createGameCallback={onCreateGame}
-                    setMessage={props.setMessage}
-                />
-            )}
+            </div>
+            <div className="TabBody">
+                {selectedTab == 0 && (<HostedGames user={props.user} games={games} />)}
+                {selectedTab == 2 && (
+                    <CreateGame
+                        user={props.user}
+                        createGameCallback={onCreateGame}
+                        setMessage={props.setMessage}
+                    />
+                )}
+            </div>
         </div>
     );
 };

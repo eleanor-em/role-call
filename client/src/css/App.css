@@ -4,6 +4,7 @@ body {
 .App {
     padding-top: 1%;
     text-align: center;
+    min-height: 50vh;
     color: #e2cca4;
 }
 
@@ -18,13 +19,65 @@ body {
 
 .GameContainer {
     margin-left: 1%;
-    flex: 5;
+    flex: 4;
     flex-direction: row;
     background-color: #161824;
 }
 
+div.GameSidebar {
+    flex: 1;
+    flex-direction: row;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    margin-left: 3px;
+    margin-right: 3px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+div.GameGreeting {
+    flex: 1;
+    border: 1px #e2cca4 solid;
+    padding-top: 1em;
+    padding-bottom: 1em;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+div.GameControls {
+    flex: 5;
+    overflow-y: auto;
+}
+
+div.ColourContainer {
+    display: flex;
+    flex-direction: row;
+}
+
+span.ColourSelector {
+    flex: 1;
+    width: 1em;
+    margin-left: 3px;
+    margin-right: 3px;
+    cursor: pointer;
+    box-sizing: border-box;
+    border: 3px solid black;
+}
+
+span.ColourSelector:hover {
+    border: 3px solid white;
+    box-sizing: border-box;
+}
+
+div.TokenControlContainer {
+    height: 100%;
+}
+
 .Content {
     display: flex;
+    width: 100%;
     flex: 1;
     flex-direction: column;
     padding: 1em;
@@ -75,12 +128,43 @@ label {
     text-align: left;
 }
 
+div.TabContainer {
+    display: flex;
+    text-align: center;
+    align-content: center;
+}
+
+div.TabBody {
+    flex: 3;
+    padding: 0.3em;
+    border-bottom: 1px #e2cca4 solid;
+    border-right: 1px #e2cca4 solid;
+    border-left: 1px #e2cca4 solid;
+}
+
 span.SelectedTab {
-    text-decoration: underline;
+    flex: 1;
+    text-align: center;
+    display: inline-flex;
+    flex-direction: row;
+    padding: 0.3em;
+    padding-bottom: 1em;
+    border-left: 1px #e2cca4 solid;
+    border-top: 1px #e2cca4 solid;
+    border-right: 1px #e2cca4 solid;
 }
 
 span.UnselectedTab {
+    flex: 1;
+    text-align: center;
+    display: inline-flex;
+    flex-direction: row;
+    padding: 0.3em;
+    padding-bottom: 1em;
     cursor: pointer;
+    border: 1px #a38855 solid;
+    border-bottom-color: #e2cca4;
+    color: #a38855;
 }
 
 span.UnselectedTab:hover {
@@ -93,13 +177,6 @@ div.PlayerName {
     padding-left: 1em;
 }
 
-div.GameSidebar {
-    flex: 1;
-    flex-direction: row;
-    height: 90%;
-    padding-left: 0.5em;
-    padding-right: 0.5em;
-}
 div.InfoDisplay {
     padding-bottom: 1em;
     font-size: 14pt;

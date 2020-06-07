@@ -12,8 +12,8 @@ impl GameState {
 
     pub fn process(&mut self, msg: ProtocolMessage) {
         match msg {
-            ProtocolMessage::PlaceToken { kind, x, y } => {
-                self.tokens.push(Token { kind, x, y });
+            ProtocolMessage::PlaceToken { kind, x, y, colour } => {
+                self.tokens.push(Token { kind, x, y, colour });
             },
             _ => {},
         }
