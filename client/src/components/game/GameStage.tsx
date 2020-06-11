@@ -15,8 +15,9 @@ export interface GameStageProps {
 }
 
 export class Renderer {
-    // 5 / 6 due to flex in CSS
+    // 4 / 5 due to flex in CSS
     width = window.innerWidth * 4 / 5;
+    // this number is fudged, sorry
     height = window.innerHeight * 0.96;
     cellSize = 64;
     renderListeners: Record<string, (ctx: CanvasRenderingContext2D, cellSize: number) => void>;
@@ -30,24 +31,13 @@ export class Renderer {
         }, [window.innerWidth, window.innerHeight]);
     }
 
-    invTransform(point: Point): Point {
+    transform(point: Point): Point {
         const scale = this.matrix.a;
         const transX = this.matrix.e;
         const transY = this.matrix.f;
         const result =  {
             x: Math.round((point.x - transX) / scale),
             y: Math.round((point.y - transY) / scale),
-        };
-        return result;
-    }
-
-    transform(point: Point): Point {
-        const scale = this.matrix.a;
-        const transX = this.matrix.e;
-        const transY = this.matrix.f;
-        const result =  {
-            x: Math.round(point.x * scale + transX),
-            y: Math.round(point.y * scale + transY),
         };
         return result;
     }
@@ -110,12 +100,12 @@ export class Renderer {
     }
 }
 
+let prevSelected = TokenType.None;
 
 export function GameStage(props: GameStageProps): React.ReactElement {
     const renderer = new Renderer();
 
     const [selected, setSelected] = useState(TokenType.None);
-    const [prevSelected, setPrevSelected] = useState(TokenType.None);
     const [hideToken, setHideToken] = useState(false);
     const [cursor, setCursor] = useState('default');
 
@@ -126,7 +116,6 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     const [mouseGridCoord, setMouseGridCoord] = useState({ x: 0, y: 0 });
 
     const [dragGrid, setDragGrid] = useState(false);
-    const [scaleCounter, setScaleCounter] = useState(0);
     const [scale, setScale] = useState(1);
     const [translation, setTranslation] = useState({ x: 0, y: 0 });
 
@@ -148,14 +137,13 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }, []);
     
     renderer.addRenderListener('SelectedPreview', (ctx, cellSize) => {
-        const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseCoord));
+        const { x, y } = renderer.snapToGrid(renderer.transform(mouseCoord));
         if (!modifiers.shift && !modifiers.ctrl) {
             drawToken(ctx, selected, x, y, cellSize, props.tokenColour);
         }
     });
 
     function handleMouseMove(ev: any): void {
-        // setHoverCanvas(true);
         handleMouseEnter(ev);
 
         const bounds = ev.target.getBoundingClientRect();
@@ -194,7 +182,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                     onZoomIn(mouse, 0.4);
                 }
             } else if (selected != TokenType.None) {
-                const { x, y } = renderer.snapToGrid(renderer.invTransform(mouseCoord));
+                const { x, y } = renderer.snapToGrid(renderer.transform(mouseCoord));
                 props.comms?.placeToken(selected, x, y, props.tokenColour);
             }
         } else if (ev.button == 1) {
@@ -205,31 +193,29 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
 
     function onZoomIn(mouse: Point, scaleFactor: number) {
-        const newScale = scale * Math.exp(scaleFactor);
-        setScaleCounter(scaleCounter + 1);
-        setScale(newScale);
+        const delta = Math.exp(scaleFactor);
+        setScale(scale * delta);
 
         setTranslation({
-            x: mouse.x - (mouse.x - translation.x) * newScale / scale,
-            y: mouse.y - (mouse.y - translation.y) * newScale / scale,
+            x: mouse.x - (mouse.x - translation.x) * delta,
+            y: mouse.y - (mouse.y - translation.y) * delta,
         });
     }
 
     function onZoomOut(mouse: Point, scaleFactor: number) {
-        const newScale = scale / Math.exp(scaleFactor);
-        setScaleCounter(scaleCounter - 1);
-        setScale(newScale);
+        const delta = 1 / Math.exp(scaleFactor);
+        setScale(scale * delta);
 
         setTranslation({
-            x: mouse.x - (mouse.x - translation.x) * newScale / scale,
-            y: mouse.y - (mouse.y - translation.y) * newScale / scale,
+            x: mouse.x - (mouse.x - translation.x) * delta,
+            y: mouse.y - (mouse.y - translation.y) * delta
         });
     }
 
     function startHideToken() {
         if (!hideToken) {
-            setPrevSelected(selected);
             setSelected(TokenType.None);
+            prevSelected = selected;
             setHideToken(true);
             forceRender();
         }
@@ -237,8 +223,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function endHideToken() {
         if (hideToken) {
-            setPrevSelected(TokenType.None);
             setSelected(prevSelected);
+            prevSelected = TokenType.None;
             setHideToken(false);
             forceRender();
         }
@@ -309,7 +295,6 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         if (ev.key == ' ') {
             setTranslation({ x: 0, y: 0 });
             setScale(1);
-            setScaleCounter(0);
         }
     }
 
