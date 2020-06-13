@@ -17,8 +17,12 @@ const colours = [
     '#0000ff',
 ];
 
+let selected = TokenType.None;
+
 export function TokenControls(props: TokenControlsProps): React.ReactElement {
     const [col, setCol] = useState('#ff0000');
+    const [mouseX, setMouseX] = useState(0);
+    const [mouseY, setMouseY] = useState(0);
     const cellSize = 64;
 
     useEffect(() => {
@@ -31,8 +35,16 @@ export function TokenControls(props: TokenControlsProps): React.ReactElement {
 
         let x = 0;
         let y = 0;
+        let onSomething = false;
         for (const type of [TokenType.Circle, TokenType.Square, TokenType.Triangle, TokenType.Diamond]) {
-            drawToken(ctx, type, x, y, 64, col);
+            let highlight = false;
+            if (mouseX > x && mouseY > y && mouseX < x + cellSize && mouseY < y + cellSize) {
+                // hack: enums are actually just ints
+                selected = type;
+                highlight = true;
+                onSomething = true;
+            }
+            drawToken(ctx, type, x, y, 64, col, highlight);
 
             x += cellSize;
             if (x > canvas.width) {
@@ -40,19 +52,47 @@ export function TokenControls(props: TokenControlsProps): React.ReactElement {
                 y += cellSize;
             }
         }
-    }, [window.innerWidth, window.innerHeight, col]);
+
+        if (!onSomething) {
+            selected = TokenType.None;
+        }
+    }, [window.innerWidth, window.innerHeight, col, mouseX, mouseY]);
 
     useEffect(() => {
         props.setTokenColour(col);
     }, [col]);
 
+    function handleMouseMove(ev: any): void {
+        const bounds = ev.target.getBoundingClientRect();
+        setMouseX(ev.clientX - Math.round(bounds.left));
+        setMouseY(ev.clientY - Math.round(bounds.top));
+    }
+
+    function handleMouseDown(ev: any): void {
+        if (ev.button == 0 && selected != TokenType.None) {
+            props.setTokenType(selected);
+        }
+    }
+
+    function resetMouse(): void {
+        selected = TokenType.None;
+        setMouseX(0);
+        setMouseY(0);
+    }
 
     return (
         <div id="TokenControlContainer">
             <div className="ColourContainer">
                 {colours.map(col => (<ColourSelector key={col} col={col} onClick={setCol} />))}
             </div>
-            <canvas id="TokenControlCanvas" width={0} height={window.innerHeight * 0.5} />
+            <canvas id="TokenControlCanvas"
+                    width={0}
+                    height={window.innerHeight * 0.5}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseEnter={handleMouseMove}
+                    onMouseLeave={resetMouse}
+                    onBlur={resetMouse} />
         </div>
     );
 }

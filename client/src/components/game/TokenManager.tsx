@@ -16,13 +16,14 @@ export function drawToken(ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
     cellSize: number,
-    colour: string,): void {
+    colour: string,
+    highlight=false): void {
 
     const padding = cellSize * 0.15;
     const radius = (cellSize - 2 * padding) / 2;
 
     ctx.lineWidth = 4;
-    ctx.strokeStyle = 'black';
+    ctx.strokeStyle = highlight ? 'white' : 'black';
     ctx.fillStyle = colour;
 
     switch (type) {
@@ -101,5 +102,5 @@ export function TokenManager(props: TokenManagerProps): React.ReactElement {
         }
     });
 
-    return (null);
+    return null;
 }
