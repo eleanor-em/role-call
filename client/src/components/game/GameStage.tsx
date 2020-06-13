@@ -21,11 +21,11 @@ export class Renderer {
     // this number is fudged, sorry
     height = window.innerHeight * 0.96;
     cellSize = 64;
-    renderListeners: Record<string, (ctx: CanvasRenderingContext2D, cellSize: number) => void>;
+    renderListenerDepths: Record<string, number> = {};
+    renderListeners: Record<string, (ctx: CanvasRenderingContext2D, cellSize: number) => void> = {};
     matrix: DOMMatrix = null;
 
     constructor() {
-        this.renderListeners = {};
         useEffect(() => {
             this.width = window.innerWidth * 4 / 5;
             this.height = window.innerHeight * 0.96;
@@ -47,9 +47,9 @@ export class Renderer {
     }
 
     // Listeners should use a unique reference string, to prevent duplicate listeners.
-    addRenderListener(ref: string, listener: ((ctx: CanvasRenderingContext2D, cellSize: number) => void)): void {
-        // TODO: sort by depth
+    addRenderListener(ref: string, listener: ((ctx: CanvasRenderingContext2D, cellSize: number) => void), depth=0): void {
         this.renderListeners[ref] = listener;
+        this.renderListenerDepths[ref] = depth;
     }
 
     snapToGrid(point: Point): Point {
@@ -58,8 +58,7 @@ export class Renderer {
         return { x, y };
     }
 
-    render(translation: Point, scale: number): void {
-        // console.log('render');
+    render(translation: Point, scale: number, depth=0): void {
         const canvas = document.getElementById('stage') as HTMLCanvasElement;
         const ctx = canvas.getContext('2d');
 
@@ -71,7 +70,11 @@ export class Renderer {
         
         // Draw content
         this.renderGrid(ctx);
-        Object.values(this.renderListeners).forEach(op => op(ctx, this.cellSize));
+        Object.keys(this.renderListeners)
+            // descending order by depth
+            .sort((a, b) => this.renderListenerDepths[a] - this.renderListenerDepths[b])
+            .map(key => this.renderListeners[key])
+            .forEach(op => op(ctx, this.cellSize));
     }
 
     renderGrid(ctx: CanvasRenderingContext2D): void {
@@ -146,7 +149,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         if (!modifiers.shift && !modifiers.ctrl) {
             drawToken(ctx, selected, x, y, cellSize, props.tokenColour);
         }
-    });
+    }, 1);
 
     function handleMouseMove(ev: any): void {
         handleMouseEnter(ev);
