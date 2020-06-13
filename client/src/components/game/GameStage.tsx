@@ -1,8 +1,8 @@
 import * as React from 'react';
+import {useEffect, useState} from 'react';
 import '../../css/App.css';
-import { useState, useEffect } from 'react';
-import { Comms } from './CommsComponent';
-import { TokenManager, TokenType, drawToken } from './TokenManager';
+import {Comms} from './CommsComponent';
+import {drawToken, TokenManager, TokenType} from './TokenManager';
 
 export interface Point {
     x: number,
@@ -33,14 +33,17 @@ export class Renderer {
     }
 
     transform(point: Point): Point {
-        const scale = this.matrix.a;
-        const transX = this.matrix.e;
-        const transY = this.matrix.f;
-        const result =  {
-            x: Math.round((point.x - transX) / scale),
-            y: Math.round((point.y - transY) / scale),
-        };
-        return result;
+        if (this.matrix) {
+            const scale = this.matrix.a;
+            const transX = this.matrix.e;
+            const transY = this.matrix.f;
+            return {
+                x: Math.round((point.x - transX) / scale),
+                y: Math.round((point.y - transY) / scale),
+            };
+        } else {
+            return point;
+        }
     }
 
     // Listeners should use a unique reference string, to prevent duplicate listeners.
@@ -56,7 +59,7 @@ export class Renderer {
     }
 
     render(translation: Point, scale: number): void {
-        console.log('render');
+        // console.log('render');
         const canvas = document.getElementById('stage') as HTMLCanvasElement;
         const ctx = canvas.getContext('2d');
 
@@ -130,9 +133,12 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         setForceRender(!forceRenderFlag);
     }
 
-    if (selected != TokenType.None && selected != props.tokenType) {
+    if (!hideToken && selected != props.tokenType) {
         selected = props.tokenType;
         forceRender();
+    }
+    if (hideToken && prevSelected != props.tokenType) {
+        prevSelected = props.tokenType;
     }
     
     renderer.addRenderListener('SelectedPreview', (ctx, cellSize) => {
@@ -213,8 +219,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function startHideToken() {
         if (!hideToken) {
-            selected = TokenType.None;
             prevSelected = selected;
+            selected = TokenType.None;
             setHideToken(true);
             forceRender();
         }
@@ -298,11 +304,15 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
 
     function handleFocus(ev: any): void {
-        setModifiers({
+        const mods = {
             ctrl: ev.ctrlKey,
             alt: ev.altKey,
             shift: ev.shiftKey,
-        });
+        };
+
+        updateCursor(mods);
+        setModifiers(mods);
+        forceRender()
     }
 
     function handleOnWheel(ev: any): void {
@@ -339,7 +349,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     useEffect(() => {
         renderer.render(translation, scale);
-    }, [translation, mouseGridCoord, scale, forceRenderFlag]);
+    }, [translation, mouseGridCoord, scale, modifiers, forceRenderFlag]);
 
 
     return (
