@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { TokenControls } from './TokenControls';
+import {TokenType} from "./TokenManager";
 
 export interface ControlsProps {
     setTokenColour(col: string): void,
+    setTokenType(type: TokenType): void,
 }
 
 export function Controls(props: ControlsProps): React.ReactElement {
@@ -15,7 +17,7 @@ export function Controls(props: ControlsProps): React.ReactElement {
             case 'Maps':
                 break;
             case 'Tokens':
-                return (<TokenControls setTokenColour={props.setTokenColour} />);
+                return (<TokenControls setTokenColour={props.setTokenColour} setTokenType={props.setTokenType} />);
             case 'Props':
                 break;
         }

@@ -12,6 +12,7 @@ export interface Point {
 export interface GameStageProps {
     comms: Comms,
     tokenColour: string,
+    tokenType: TokenType,
 }
 
 export class Renderer {
@@ -101,18 +102,15 @@ export class Renderer {
 }
 
 let prevSelected = TokenType.None;
+let selected = TokenType.Circle;
 
 export function GameStage(props: GameStageProps): React.ReactElement {
     const renderer = new Renderer();
 
-    const [selected, setSelected] = useState(TokenType.None);
     const [hideToken, setHideToken] = useState(false);
     const [cursor, setCursor] = useState('default');
 
-    // mouseCoord: the untransformed coordinate of the mouse
-    // relative to the canvas
     const [mouseCoord, setMouseCoord] = useState({ x: 0, y: 0 });
-    // mouseGridCoord: the transformed coordinate of the mouse, snapped to the grid
     const [mouseGridCoord, setMouseGridCoord] = useState({ x: 0, y: 0 });
 
     const [dragGrid, setDragGrid] = useState(false);
@@ -131,10 +129,11 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     function forceRender() {
         setForceRender(!forceRenderFlag);
     }
-    
-    useEffect(() => {
-        setSelected(TokenType.Diamond);
-    }, []);
+
+    if (selected != TokenType.None && selected != props.tokenType) {
+        selected = props.tokenType;
+        forceRender();
+    }
     
     renderer.addRenderListener('SelectedPreview', (ctx, cellSize) => {
         const { x, y } = renderer.snapToGrid(renderer.transform(mouseCoord));
@@ -214,7 +213,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function startHideToken() {
         if (!hideToken) {
-            setSelected(TokenType.None);
+            selected = TokenType.None;
             prevSelected = selected;
             setHideToken(true);
             forceRender();
@@ -223,7 +222,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function endHideToken() {
         if (hideToken) {
-            setSelected(prevSelected);
+            selected = prevSelected;
             prevSelected = TokenType.None;
             setHideToken(false);
             forceRender();
@@ -340,7 +339,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     useEffect(() => {
         renderer.render(translation, scale);
-    }, [translation, mouseGridCoord, scale, forceRender]);
+    }, [translation, mouseGridCoord, scale, forceRenderFlag]);
 
 
     return (

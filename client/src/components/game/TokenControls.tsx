@@ -1,10 +1,11 @@
 import * as React from 'react';
-import { ColourSelector } from '../ColourSelector';
-import { useEffect, useState } from 'react';
-import { drawToken, TokenType } from './TokenManager';
+import {useEffect, useState} from 'react';
+import {ColourSelector} from '../ColourSelector';
+import {drawToken, TokenType} from './TokenManager';
 
 export interface TokenControlsProps {
     setTokenColour(col: string): void,
+    setTokenType(type: TokenType): void,
 }
 
 const colours = [
@@ -18,21 +19,33 @@ const colours = [
 
 export function TokenControls(props: TokenControlsProps): React.ReactElement {
     const [col, setCol] = useState('#ff0000');
-
+    const cellSize = 64;
 
     useEffect(() => {
         const container = document.getElementById('TokenControlContainer');
         const canvas = document.getElementById('TokenControlCanvas') as HTMLCanvasElement;
-        const w = container.clientWidth;
-        canvas.width = w;
+
+        canvas.width = container.clientWidth;
 
         const ctx = canvas.getContext('2d');
-        drawToken(ctx, TokenType.Circle, 0, 0, 64, col);
+
+        let x = 0;
+        let y = 0;
+        for (const type of [TokenType.Circle, TokenType.Square, TokenType.Triangle, TokenType.Diamond]) {
+            drawToken(ctx, type, x, y, 64, col);
+
+            x += cellSize;
+            if (x > canvas.width) {
+                x = 0;
+                y += cellSize;
+            }
+        }
     }, [window.innerWidth, window.innerHeight, col]);
 
     useEffect(() => {
         props.setTokenColour(col);
     }, [col]);
+
 
     return (
         <div id="TokenControlContainer">
