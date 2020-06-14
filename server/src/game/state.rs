@@ -1,20 +1,26 @@
 use crate::game::protocol::{ProtocolMessage, Token};
 use std::sync::mpsc::SyncSender;
+use crate::game::server::UserInfo;
 
 pub struct GameState {
+    host: UserInfo,
     tokens: Vec<Token>,
 }
 
 impl GameState {
-    pub fn new() -> Self {
-        Self { tokens: Vec::new() }
+    pub fn new(host: UserInfo) -> Self {
+        Self { host, tokens: Vec::new() }
     }
 
-    pub fn process(&mut self, msg: ProtocolMessage) -> bool {
+    pub fn process(&mut self, msg: &mut ProtocolMessage) -> bool {
         match msg {
             ProtocolMessage::PlaceToken(token) => {
+                // controller is automatically the host
+                token.controller = Some(self.host.username.clone());
+
                 if !self.tokens.iter()
                         .any(|other| token.x == other.x && token.y == other.y) {
+                    let token = (*token).clone();
                     self.tokens.push(token);
                     true
                 } else {

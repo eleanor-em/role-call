@@ -64,9 +64,9 @@ pub struct Server {
 }
 
 impl Server {
-    fn new(game_token: String) -> Self {
+    fn new(host: UserInfo, game_token: String) -> Self {
         let clients = flurry::HashMap::new();
-        let state = Mutex::new(GameState::new());
+        let state = Mutex::new(GameState::new(host));
         let keepalive = Mutex::new(Some(Instant::now()));
         Self { game_token, clients, state, keepalive }
     }
@@ -128,11 +128,11 @@ impl Server {
 
     pub async fn recv(&self, msg: Message, from_host: bool) {
         if let Ok(text) = msg.to_text() {
-            if let Ok(parsed) = serde_json::from_str::<ProtocolMessage>(&text) {
+            if let Ok(mut parsed) = serde_json::from_str::<ProtocolMessage>(&text) {
                 if self.authorised(&parsed, from_host) {
                     let proceed = {
                         let mut state = self.state.lock().unwrap();
-                        state.process(parsed)
+                        state.process(&mut parsed)
                     };
 
                     if proceed {
@@ -165,7 +165,7 @@ pub fn connect_to_server(user: UserInfo, game_token: String, tx: SyncSender<Stri
     let server = servers.entry(game_token.clone())
         .or_insert_with(|| {
             info!("Create server for game {}", game_token);
-            Arc::new(Server::new(game_token))
+            Arc::new(Server::new(user.clone(), game_token))
         });
     if !server.has_client(&user) {
         futures::executor::block_on(server.add_client(user, tx));

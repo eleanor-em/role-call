@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize, AsStaticStr)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ProtocolMessage {
     PlaceToken(Token),
     Connect { username: String, host: bool },
