@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {useEffect, useState} from 'react';
 import {ColourSelector} from '../ColourSelector';
-import {drawToken, TokenType} from './TokenManager';
+import {drawToken, HighlightType, TokenType} from './TokenManager';
 
 export interface TokenControlsProps {
     setTokenColour(col: string): void,
@@ -39,12 +39,11 @@ export function TokenControls(props: TokenControlsProps): React.ReactElement {
         for (const type of [TokenType.Circle, TokenType.Square, TokenType.Triangle, TokenType.Diamond]) {
             let highlight = false;
             if (mouseX > x && mouseY > y && mouseX < x + cellSize && mouseY < y + cellSize) {
-                // hack: enums are actually just ints
                 selected = type;
                 highlight = true;
                 onSomething = true;
             }
-            drawToken(ctx, type, x, y, 64, col, highlight);
+            drawToken(ctx, type, x, y, 64, col, highlight ? HighlightType.Hover : HighlightType.None);
 
             x += cellSize;
             if (x > canvas.width) {

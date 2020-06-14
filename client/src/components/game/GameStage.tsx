@@ -2,7 +2,7 @@ import * as React from 'react';
 import {useEffect, useState} from 'react';
 import '../../css/App.css';
 import {Comms} from './CommsComponent';
-import {drawToken, TokenManager, TokenType} from './TokenManager';
+import {drawToken, getTokenCoord, HighlightType, Token, TokenManager, TokenType} from './TokenManager';
 
 export interface Point {
     x: number,
@@ -26,13 +26,6 @@ export class Renderer {
     renderListeners: Record<string, (ctx: CanvasRenderingContext2D, cellSize: number) => void> = {};
     matrix: DOMMatrix = null;
 
-    constructor() {
-        useEffect(() => {
-            this.width = window.innerWidth * 4 / 5;
-            this.height = window.innerHeight * 0.96;
-        }, [window.innerWidth, window.innerHeight]);
-    }
-
     transform(point: Point): Point {
         if (this.matrix) {
             const scale = this.matrix.a;
@@ -43,6 +36,7 @@ export class Renderer {
                 y: Math.round((point.y - transY) / scale),
             };
         } else {
+            console.log('missing matrix');
             return point;
         }
     }
@@ -68,7 +62,7 @@ export class Renderer {
         ctx.clearRect(0, 0, this.width, this.height);
         ctx.setTransform(scale, 0, 0, scale, translation.x, translation.y);
         this.matrix = ctx.getTransform();
-        
+
         // Draw content
         this.renderGrid(ctx);
         Object.keys(this.renderListeners)
@@ -110,9 +104,18 @@ export class Renderer {
 
 let prevTypeToPlace = TokenType.None;
 let typeToPlace = TokenType.None;
+let selectedToken: Token = null;
+let renderer: Renderer = null;
 
 export function GameStage(props: GameStageProps): React.ReactElement {
-    const renderer = new Renderer();
+    if (renderer == null) {
+        renderer = new Renderer();
+    }
+
+    useEffect(() => {
+        renderer.width = window.innerWidth * 4 / 5;
+        renderer.height = window.innerHeight * 0.96;
+    }, [window.innerWidth, window.innerHeight]);
 
     const [hideToken, setHideToken] = useState(false);
     const [cursor, setCursor] = useState('default');
@@ -149,7 +152,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     renderer.addRenderListener('SelectedPreview', (ctx, cellSize) => {
         const { x, y } = renderer.snapToGrid(renderer.transform(mouseCoord));
         if (!modifiers.shift && !modifiers.ctrl) {
-            drawToken(ctx, typeToPlace, x, y, cellSize, props.tokenColour);
+            drawToken(ctx, typeToPlace, x, y, cellSize, props.tokenColour, HighlightType.Select);
         }
     }, 1);
 
@@ -180,31 +183,50 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         const mx = ev.clientX - Math.round(bounds.left);
         const my = ev.clientY - Math.round(bounds.top);
         const mouse = { x: mx, y: my };
-        // 0 is the left mouse button, 1 is the middle mouse button, 2 is the right
-        if (ev.button == 0) {
-            if (modifiers.shift) {
+
+        switch (ev.button) {
+            case 0:
+                // left click
+                handleLeftMouse(mouse);
+                break;
+            case 1:
+                // middle click
                 setDragGrid(true);
-            } else if (modifiers.ctrl) {
-                if (modifiers.alt) {
-                    // larger modifier for click zooming
+                break;
+            case 2:
+                // right click
+                if (modifiers.ctrl) {
                     onZoomOut(mouse, 0.4);
-                } else {
-                    onZoomIn(mouse, 0.4);
                 }
-            } else if (typeToPlace != TokenType.None) {
-                // send a place message and reset the selected type
-                const { x, y } = renderer.snapToGrid(renderer.transform(mouseCoord));
-                props.comms?.placeToken(typeToPlace, x, y, props.tokenColour);
-                props.setTokenType(TokenType.None);
-            }
-        } else if (ev.button == 1) {
-            setDragGrid(true);
-        } else if (ev.button == 2 && modifiers.ctrl) {
-            onZoomOut(mouse, 0.4);
+                break;
         }
     }
 
-    function onZoomIn(mouse: Point, scaleFactor: number) {
+    function handleLeftMouse(mouse: Point): void {
+        if (modifiers.shift) {
+            setDragGrid(true);
+        } else if (modifiers.ctrl) {
+            if (modifiers.alt) {
+                // larger modifier for click zooming
+                onZoomOut(mouse, 0.4);
+            } else {
+                onZoomIn(mouse, 0.4);
+            }
+        } else if (typeToPlace != TokenType.None) {
+            onPlaceToken(mouse);
+        } else {
+
+        }
+    }
+
+    function onPlaceToken(mouse: Point): void {
+        // send a place message and reset the selected type
+        const { x, y } = renderer.snapToGrid(renderer.transform(mouse));
+        props.comms?.placeToken(typeToPlace, x, y, props.tokenColour);
+        props.setTokenType(TokenType.None);
+    }
+
+    function onZoomIn(mouse: Point, scaleFactor: number): void {
         const delta = Math.exp(scaleFactor);
         setScale(scale * delta);
 
@@ -214,7 +236,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         });
     }
 
-    function onZoomOut(mouse: Point, scaleFactor: number) {
+    function onZoomOut(mouse: Point, scaleFactor: number): void {
         const delta = 1 / Math.exp(scaleFactor);
         setScale(scale * delta);
 
@@ -224,7 +246,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         });
     }
 
-    function startHideToken() {
+    function startHideToken(): void {
         if (!hideToken) {
             prevTypeToPlace = typeToPlace;
             typeToPlace = TokenType.None;
@@ -233,7 +255,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         }
     }
 
-    function endHideToken() {
+    function endHideToken(): void {
         if (hideToken) {
             typeToPlace = prevTypeToPlace;
             prevTypeToPlace = TokenType.None;
@@ -374,7 +396,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             <TokenManager
                 comms={props.comms}
                 renderer={renderer}
-            />
+                mouseHoverCoord={renderer.snapToGrid(renderer.transform(mouseCoord))}
+                selectedTokenCoord={getTokenCoord(selectedToken)} />
         </>
     );
 }
