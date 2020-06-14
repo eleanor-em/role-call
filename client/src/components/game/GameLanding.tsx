@@ -27,11 +27,11 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
     const [players, setPlayers] = useState([] as StoredPlayer[]);
     const [failed, setFailed] = useState('');
     const [isHost, setIsHost] = useState(false);
-    const [tokenType, setTokenType] = useState(TokenType.Circle);
+    const [tokenType, setTokenType] = useState(TokenType.None);
     const [tokenColour, setTokenColour] = useState('#ff0000');
     
     comms?.addConnectListener('GameLandingConnect', msg => {
-        const player = { name: msg.Connect.username, host: msg.Connect.host };
+        const player = { name: msg.username, host: msg.host };
         if (player.name == props.user.username && player.host) {
             setIsHost(true);
         }
@@ -50,11 +50,11 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
     });
 
     comms?.addDisconnectListener('GameLandingDisconnect', msg => {
-        setPlayers(players.filter(({ name }) => name != msg.Disconnect.username));
+        setPlayers(players.filter(({ name }) => name != msg.username));
     });
 
     comms?.addFailedListener('GameLandingFailed', msg => {
-        setFailed(msg.FailedConnection.reason);
+        setFailed(msg.reason);
     });
 
     const playerList = (
@@ -85,7 +85,7 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
                 onDisconnect={() => props.setMessage('Connection lost. Try reloading the page.')}
             />
             <div className="GameContainer">
-                <GameStage comms={comms} tokenColour={tokenColour} tokenType={tokenType} />
+                <GameStage comms={comms} tokenColour={tokenColour} tokenType={tokenType} setTokenType={setTokenType} />
             </div>
             <div className="GameSidebar">
                 <div className="GameGreeting">

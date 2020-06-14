@@ -2,34 +2,21 @@ import * as React from 'react';
 import { w3cwebsocket as W3cWebSocket } from 'websocket';
 import { useEffect } from 'react';
 import { User } from '../../models/User';
-import { TokenType } from './TokenManager';
+import { TokenType, Token } from './TokenManager';
 
-export interface PlaceTokenMessage {    
-    PlaceToken: {
-        kind: TokenType,
-        x: number,
-        y: number,
-        colour: string,
-    }
-}
+export type PlaceTokenMessage = Token;
 
 export interface ConnectMessage {
-    Connect: {
-        username: string,
-        host: boolean,
-    }
+    username: string,
+    host: boolean,
 }
 
 export interface DisconnectMessage {
-    Disconnect: {
-        username: string,
-    }
+    username: string,
 }
 
 export interface FailedConnectionMessage {
-    FailedConnection: {
-        reason: string,
-    }
+    reason: string,
 }
 
 export class Comms {
@@ -57,27 +44,28 @@ export class Comms {
         socket.onclose = props.onDisconnect;
 
         socket.onmessage = message => {
-            const data: any = JSON.parse(message.data.toString());
-            switch (Object.keys(data)[0]) {
+            // Interface with Rust JSON serialiser
+            const rawData: any = JSON.parse(message.data.toString());
+            const kind = Object.keys(rawData)[0];
+            const data = rawData[kind];
+
+            switch (kind) {
                 case 'PlaceToken': {
-                    data.PlaceToken.kind = TokenType[data.PlaceToken.kind];
+                    data.kind = TokenType[data.kind];
                     Object.values(this.placeTokenListeners).forEach(op => op(data));
                     break;
                 }
                 case 'Connect': {
-                    data.Connect.kind = TokenType[data.Connect.kind];
                     Object.values(this.connectListeners).forEach(op => op(data));
                     break;
                 }
                 case 'Disconnect': {
-                    data.Disconnect.kind = TokenType[data.Disconnect.kind];
                     Object.values(this.disconnectListeners).forEach(op => op(data));
                     break;
                 }
                 case 'FailedConnection': {
                     // If the websocket failed, don't pop up since the user will see a splash screen
                     this.shouldShowRefresh = false;
-                    data.FailedConnection.kind = TokenType[data.FailedConnection.kind];
                     Object.values(this.failedListeners).forEach(op => op(data));
                     break;
                 }
@@ -89,7 +77,9 @@ export class Comms {
         // Need to convert to name for transport
         const kind = TokenType[type];
         this.socket.send(JSON.stringify({
-            PlaceToken: { kind, x, y, colour }
+            PlaceToken: {
+                kind, x, y, colour
+            }
         }));
     }
 
@@ -123,5 +113,5 @@ export function CommsComponent(props: CommsProps): React.ReactElement {
         new Comms(new W3cWebSocket(process.env.RC_WEBSOCKET_URL), props);
     }, []);
 
-    return (null);
+    return null;
 }

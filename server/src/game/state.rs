@@ -10,12 +10,18 @@ impl GameState {
         Self { tokens: Vec::new() }
     }
 
-    pub fn process(&mut self, msg: ProtocolMessage) {
+    pub fn process(&mut self, msg: ProtocolMessage) -> bool {
         match msg {
-            ProtocolMessage::PlaceToken { kind, x, y, colour } => {
-                self.tokens.push(Token { kind, x, y, colour });
+            ProtocolMessage::PlaceToken(token) => {
+                if !self.tokens.iter()
+                        .any(|other| token.x == other.x && token.y == other.y) {
+                    self.tokens.push(token);
+                    true
+                } else {
+                    false
+                }
             },
-            _ => {},
+            _ => true,
         }
     }
 

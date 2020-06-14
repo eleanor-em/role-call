@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-// TODO: refactor PlaceToken to have a Token
+#[derive(Clone, Debug, Serialize, Deserialize, AsStaticStr)]
 pub enum ProtocolMessage {
-    PlaceToken { kind: String, x: i16, y: i16, colour: String, },
+    PlaceToken(Token),
     Connect { username: String, host: bool },
     Disconnect { username: String },
     FailedConnection { reason: String },
@@ -11,7 +10,6 @@ pub enum ProtocolMessage {
 
 impl ProtocolMessage {
     pub(crate) fn to_string(&self) -> String {
-        // Should never panic
         serde_json::to_string(&self).unwrap()
     }
     pub(crate) fn into_msg(self) -> RawMessage {
@@ -27,21 +25,17 @@ impl Into<RawMessage> for ProtocolMessage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Token {
     pub kind: String,
     pub x: i16,
     pub y: i16,
     pub colour: String,
+    pub controller: Option<String>,
 }
 
 impl Token {
     pub fn to_msg(&self) -> ProtocolMessage {
-        ProtocolMessage::PlaceToken {
-            kind: self.kind.clone(),
-            x: self.x,
-            y: self.y,
-            colour: self.colour.clone(),
-        }
+        ProtocolMessage::PlaceToken(self.clone())
     }
 }

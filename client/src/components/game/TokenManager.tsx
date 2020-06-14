@@ -22,7 +22,7 @@ export function drawToken(ctx: CanvasRenderingContext2D,
     const padding = cellSize * 0.15;
     const radius = (cellSize - 2 * padding) / 2;
 
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 2;
     ctx.strokeStyle = highlight ? 'white' : 'black';
     ctx.fillStyle = colour;
 
@@ -74,11 +74,12 @@ export function drawToken(ctx: CanvasRenderingContext2D,
     }
 }
 
-interface Token {
+export interface Token {
     kind: TokenType,
     x: number,
     y: number,
     colour: string,
+    controller?: string,
 }
 
 export interface TokenManagerProps {
@@ -90,8 +91,8 @@ export function TokenManager(props: TokenManagerProps): React.ReactElement {
     const [tokens, setTokens] = useState([] as Token[]);
 
     function addToken(msg: PlaceTokenMessage): void {
-        if (msg.PlaceToken.kind != TokenType.None) {
-            setTokens(tokens.concat([msg.PlaceToken]));
+        if (msg.kind != TokenType.None) {
+            setTokens(tokens.concat([msg]));
         }
     }
 

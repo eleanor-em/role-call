@@ -13,6 +13,7 @@ export interface GameStageProps {
     comms: Comms,
     tokenColour: string,
     tokenType: TokenType,
+    setTokenType(type: TokenType): void,
 }
 
 export class Renderer {
@@ -58,7 +59,7 @@ export class Renderer {
         return { x, y };
     }
 
-    render(translation: Point, scale: number, depth=0): void {
+    render(translation: Point, scale: number): void {
         const canvas = document.getElementById('stage') as HTMLCanvasElement;
         const ctx = canvas.getContext('2d');
 
@@ -71,7 +72,7 @@ export class Renderer {
         // Draw content
         this.renderGrid(ctx);
         Object.keys(this.renderListeners)
-            // descending order by depth
+            // descending order by dept
             .sort((a, b) => this.renderListenerDepths[a] - this.renderListenerDepths[b])
             .map(key => this.renderListeners[key])
             .forEach(op => op(ctx, this.cellSize));
@@ -107,8 +108,8 @@ export class Renderer {
     }
 }
 
-let prevSelected = TokenType.None;
-let selected = TokenType.Circle;
+let prevTypeToPlace = TokenType.None;
+let typeToPlace = TokenType.None;
 
 export function GameStage(props: GameStageProps): React.ReactElement {
     const renderer = new Renderer();
@@ -117,6 +118,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     const [cursor, setCursor] = useState('default');
 
     const [mouseCoord, setMouseCoord] = useState({ x: 0, y: 0 });
+    // grid coord is used to hook updates since we don't need to update if we haven't moved to a new cell
     const [mouseGridCoord, setMouseGridCoord] = useState({ x: 0, y: 0 });
 
     const [dragGrid, setDragGrid] = useState(false);
@@ -136,18 +138,18 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         setForceRender(!forceRenderFlag);
     }
 
-    if (!hideToken && selected != props.tokenType) {
-        selected = props.tokenType;
+    if (!hideToken && typeToPlace != props.tokenType) {
+        typeToPlace = props.tokenType;
         forceRender();
     }
-    if (hideToken && prevSelected != props.tokenType) {
-        prevSelected = props.tokenType;
+    if (hideToken && prevTypeToPlace != props.tokenType) {
+        prevTypeToPlace = props.tokenType;
     }
     
     renderer.addRenderListener('SelectedPreview', (ctx, cellSize) => {
         const { x, y } = renderer.snapToGrid(renderer.transform(mouseCoord));
         if (!modifiers.shift && !modifiers.ctrl) {
-            drawToken(ctx, selected, x, y, cellSize, props.tokenColour);
+            drawToken(ctx, typeToPlace, x, y, cellSize, props.tokenColour);
         }
     }, 1);
 
@@ -189,9 +191,11 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 } else {
                     onZoomIn(mouse, 0.4);
                 }
-            } else if (selected != TokenType.None) {
+            } else if (typeToPlace != TokenType.None) {
+                // send a place message and reset the selected type
                 const { x, y } = renderer.snapToGrid(renderer.transform(mouseCoord));
-                props.comms?.placeToken(selected, x, y, props.tokenColour);
+                props.comms?.placeToken(typeToPlace, x, y, props.tokenColour);
+                props.setTokenType(TokenType.None);
             }
         } else if (ev.button == 1) {
             setDragGrid(true);
@@ -222,8 +226,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function startHideToken() {
         if (!hideToken) {
-            prevSelected = selected;
-            selected = TokenType.None;
+            prevTypeToPlace = typeToPlace;
+            typeToPlace = TokenType.None;
             setHideToken(true);
             forceRender();
         }
@@ -231,8 +235,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function endHideToken() {
         if (hideToken) {
-            selected = prevSelected;
-            prevSelected = TokenType.None;
+            typeToPlace = prevTypeToPlace;
+            prevTypeToPlace = TokenType.None;
             setHideToken(false);
             forceRender();
         }
