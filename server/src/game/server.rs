@@ -119,10 +119,12 @@ impl Server {
 
     fn authorised(&self, msg: &ProtocolMessage, from_host: bool) -> bool {
         match msg {
-            ProtocolMessage::PlaceToken { .. } => { from_host },
+            ProtocolMessage::PlaceToken { .. } |
+            ProtocolMessage::DeleteToken { .. } => { from_host },
+
             ProtocolMessage::Connect { .. } |
             ProtocolMessage::Disconnect { .. } |
-            ProtocolMessage::FailedConnection { .. } => { true},
+            ProtocolMessage::FailedConnection { .. } => { true },
         }
     }
 

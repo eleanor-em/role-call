@@ -19,7 +19,7 @@ export const App = function(): React.ReactElement {
     const [message, setMessage] = useState('');
     const [appState, setAppState] = useState(AppState.Loading);
     const [user, setUser] = useState(null as User);
-    const [cookies, setCookie, removeCookie] = useCookies([]);
+    const [cookies, setCookie] = useCookies([]);
 
     async function login(email: string, password: string): Promise<void> {
         setMessage('');
@@ -82,7 +82,7 @@ export const App = function(): React.ReactElement {
         <div className="App">
             <header className="AppHeader">
                 <p>
-                    <span className="Title"><img className="HeadlineImage" src="/static/favicon-128.png" />RoleCall</span>
+                    <span className="Title"><img className="HeadlineImage" src={"/static/favicon-128.png"} alt="logo" />RoleCall</span>
                     <Greeting user={user} />
                 </p>
             </header>

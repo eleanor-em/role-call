@@ -22,8 +22,18 @@ interface StoredPlayer {
     host: boolean,
 }
 
+let comms: Comms = null;
+
 export const GameLanding = function(props: GameLandingProps): React.ReactElement {
-    const [comms, setComms] = useState(null as Comms);
+    if (comms == null) {
+        comms = CommsComponent({
+            user: props.user,
+            gameToken: props.gameToken,
+            onConnect: () => {},
+            onDisconnect: () => props.setMessage('Connection lost. Try reloading the page.'),
+        });
+    }
+
     const [players, setPlayers] = useState([] as StoredPlayer[]);
     const [failed, setFailed] = useState('');
     const [isHost, setIsHost] = useState(false);
@@ -78,12 +88,6 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
         </div>
     ) : (
         <div style={{display: 'flex', flex: 1}}>
-            <CommsComponent
-                user={props.user}
-                gameToken={props.gameToken}
-                onConnect={setComms}
-                onDisconnect={() => props.setMessage('Connection lost. Try reloading the page.')}
-            />
             <div className="GameContainer">
                 <GameStage comms={comms} tokenColour={tokenColour} tokenType={tokenType} setTokenType={setTokenType} />
             </div>

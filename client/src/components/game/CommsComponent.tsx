@@ -6,6 +6,11 @@ import { TokenType, Token } from './TokenManager';
 
 export type PlaceTokenMessage = Token;
 
+export interface DeleteTokenMessage {
+    x: number,
+    y: number
+}
+
 export interface ConnectMessage {
     username: string,
     host: boolean,
@@ -21,19 +26,15 @@ export interface FailedConnectionMessage {
 
 export class Comms {
     socket: W3cWebSocket;
-    placeTokenListeners: Record<string, (msg: PlaceTokenMessage) => void>;
-    connectListeners: Record<string, (msg: ConnectMessage) => void>;
-    disconnectListeners: Record<string, (msg: DisconnectMessage) => void>;
-    failedListeners: Record<string, (msg: FailedConnectionMessage) => void>;
-    shouldShowRefresh: boolean;
+    placeTokenListeners: Record<string, (msg: PlaceTokenMessage) => void> = {};
+    deleteTokenListeners: Record<string, (msg: DeleteTokenMessage) => void> = {};
+    connectListeners: Record<string, (msg: ConnectMessage) => void> = {};
+    disconnectListeners: Record<string, (msg: DisconnectMessage) => void> = {};
+    failedListeners: Record<string, (msg: FailedConnectionMessage) => void> = {};
+    shouldShowRefresh: boolean = true;
 
     constructor(socket: W3cWebSocket, props: CommsProps) {
         this.socket = socket;
-        this.placeTokenListeners = {};
-        this.connectListeners = {};
-        this.disconnectListeners = {};
-        this.failedListeners = {};
-        this.shouldShowRefresh = true;
 
         socket.onopen = () => {
             props.onConnect(this);
@@ -53,6 +54,10 @@ export class Comms {
                 case 'PlaceToken': {
                     data.kind = TokenType[data.kind];
                     Object.values(this.placeTokenListeners).forEach(op => op(data));
+                    break;
+                }
+                case 'DeleteToken': {
+                    Object.values(this.deleteTokenListeners).forEach(op => op(data));
                     break;
                 }
                 case 'Connect': {
@@ -83,9 +88,22 @@ export class Comms {
         }));
     }
 
+    deleteToken(x: number, y: number): void {
+        this.socket.send(JSON.stringify({
+            DeleteToken: {
+                x, y
+            }
+        }));
+    }
+
     // Listeners should use a unique reference string, to prevent duplicate listeners.
     addPlaceTokenListener(ref: string, listener: ((msg: PlaceTokenMessage) => void)): void {
         this.placeTokenListeners[ref] = listener;
+    }
+
+    // Listeners should use a unique reference string, to prevent duplicate listeners.
+    addDeleteTokenListener(ref: string, listener: ((msg: DeleteTokenMessage) => void)): void {
+        this.deleteTokenListeners[ref] = listener;
     }
 
     addConnectListener(ref: string, listener: ((msg: ConnectMessage) => void)): void {
@@ -108,10 +126,6 @@ export interface CommsProps {
     onDisconnect(): void,
 }
 
-export function CommsComponent(props: CommsProps): React.ReactElement {
-    useEffect(() => {
-        new Comms(new W3cWebSocket(process.env.RC_WEBSOCKET_URL), props);
-    }, []);
-
-    return null;
+export function CommsComponent(props: CommsProps): Comms {
+    return new Comms(new W3cWebSocket(process.env.RC_WEBSOCKET_URL), props);
 }

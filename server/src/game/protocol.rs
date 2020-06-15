@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ProtocolMessage {
     PlaceToken(Token),
+    DeleteToken { x: i16, y: i16 },
     Connect { username: String, host: bool },
     Disconnect { username: String },
     FailedConnection { reason: String },

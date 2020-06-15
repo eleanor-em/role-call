@@ -23,6 +23,7 @@ export function TokenControls(props: TokenControlsProps): React.ReactElement {
     const [col, setCol] = useState('#ff0000');
     const [mouseX, setMouseX] = useState(0);
     const [mouseY, setMouseY] = useState(0);
+    const [cursor, setCursor] = useState('default');
     const cellSize = 64;
 
     useEffect(() => {
@@ -54,6 +55,11 @@ export function TokenControls(props: TokenControlsProps): React.ReactElement {
 
         if (!onSomething) {
             selected = TokenType.None;
+            if (cursor != 'default') {
+                setCursor('default');
+            }
+        } else if (cursor != 'pointer') {
+            setCursor('pointer');
         }
     }, [window.innerWidth, window.innerHeight, col, mouseX, mouseY]);
 
@@ -91,7 +97,8 @@ export function TokenControls(props: TokenControlsProps): React.ReactElement {
                     onMouseMove={handleMouseMove}
                     onMouseEnter={handleMouseMove}
                     onMouseLeave={resetMouse}
-                    onBlur={resetMouse} />
+                    onBlur={resetMouse}
+                    style={{ cursor }}/>
         </div>
     );
 }

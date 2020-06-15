@@ -2,7 +2,7 @@ import * as React from 'react';
 import {useEffect, useState} from 'react';
 import '../../css/App.css';
 import {Comms} from './CommsComponent';
-import {drawToken, getTokenCoord, HighlightType, Token, TokenManager, TokenType} from './TokenManager';
+import {drawToken, HighlightType, TokenManager, TokenType} from './TokenManager';
 
 export interface Point {
     x: number,
@@ -104,12 +104,17 @@ export class Renderer {
 
 let prevTypeToPlace = TokenType.None;
 let typeToPlace = TokenType.None;
-let selectedToken: Token = null;
 let renderer: Renderer = null;
+let tokenManager: TokenManager = null;
 
 export function GameStage(props: GameStageProps): React.ReactElement {
+    // set up initial objects
     if (renderer == null) {
         renderer = new Renderer();
+    }
+
+    if (tokenManager == null && props.comms != null) {
+        tokenManager = new TokenManager(props.comms, renderer, forceRender);
     }
 
     useEffect(() => {
@@ -148,13 +153,14 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     if (hideToken && prevTypeToPlace != props.tokenType) {
         prevTypeToPlace = props.tokenType;
     }
-    
-    renderer.addRenderListener('SelectedPreview', (ctx, cellSize) => {
+
+    function renderPreview(ctx: CanvasRenderingContext2D, cellSize: number): void {
         const { x, y } = renderer.snapToGrid(renderer.transform(mouseCoord));
         if (!modifiers.shift && !modifiers.ctrl) {
             drawToken(ctx, typeToPlace, x, y, cellSize, props.tokenColour, HighlightType.Select);
         }
-    }, 1);
+    }
+    renderer?.addRenderListener('SelectedPreview', renderPreview, 1);
 
     function handleMouseMove(ev: any): void {
         handleMouseEnter(ev);
@@ -170,8 +176,9 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         }
 
         const coord = { x: mx, y: my };
-        
         setMouseCoord(coord);
+        tokenManager?.setMouseCoord(coord);
+
         const { x, y } = renderer.snapToGrid(coord);
         if (x != mouseGridCoord.x || y != mouseGridCoord.y) {
             setMouseGridCoord({ x, y });
@@ -215,7 +222,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         } else if (typeToPlace != TokenType.None) {
             onPlaceToken(mouse);
         } else {
-
+            tokenManager?.onClick();
+            forceRender();
         }
     }
 
@@ -292,6 +300,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
 
     function handleKeyDown(ev: any): void {
+        ev.preventDefault();
+
         const mods = {...modifiers};
         switch (ev.key) {
             case 'Control':
@@ -303,7 +313,11 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             case 'Shift':
                 mods.shift = true;
                 break;
+            case 'Delete':
+                tokenManager?.onDelete();
+                break;
         }
+
         updateCursor(mods);
         setModifiers(mods);
     }
@@ -326,6 +340,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
 
     function handleKeyPress(ev: any): void {
+        console.log(ev.key);
         if (ev.key == ' ') {
             setTranslation({ x: 0, y: 0 });
             setScale(1);
@@ -361,6 +376,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             } else if (mods.ctrl) {
                 startHideToken();
                 setCursor('zoom-in');
+            } else if (tokenManager?.hoveredIndex != -1) {
+                setCursor('pointer');
             } else {
                 setCursor('default');
                 endHideToken();
@@ -393,11 +410,6 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 onContextMenu={e => e.preventDefault()} // disable context menu
                 style={{ cursor, border: '1px solid white' }}
             />
-            <TokenManager
-                comms={props.comms}
-                renderer={renderer}
-                mouseHoverCoord={renderer.snapToGrid(renderer.transform(mouseCoord))}
-                selectedTokenCoord={getTokenCoord(selectedToken)} />
         </>
     );
 }

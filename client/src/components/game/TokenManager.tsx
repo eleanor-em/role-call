@@ -31,10 +31,10 @@ export function drawToken(ctx: CanvasRenderingContext2D,
     ctx.lineWidth = 2;
     ctx.strokeStyle = 'black';
     switch (highlight) {
-        case HighlightType.Select:
-            ctx.strokeStyle = '#D8D8D8';
-            break;
         case HighlightType.Hover:
+            ctx.strokeStyle = '#bbbbbb';
+            break;
+        case HighlightType.Select:
             ctx.strokeStyle = 'white';
             break;
 
@@ -94,7 +94,6 @@ export interface Token {
     y: number,
     colour: string,
     controller?: string,
-
 }
 
 export function getTokenCoord(token?: Token): Point {
@@ -108,38 +107,67 @@ export function getTokenCoord(token?: Token): Point {
     }
 }
 
-export interface TokenManagerProps {
-    comms: Comms,
-    renderer: Renderer,
-    mouseHoverCoord: Point,
-    selectedTokenCoord?: Point
-}
+export class TokenManager {
+    renderer: Renderer;
+    comms: Comms;
+    mouseCoord = { x: 0, y: 0};
+    tokens: Token[] = [];
+    hoveredIndex = -1;
+    selectedIndex = -1;
 
-export function TokenManager(props: TokenManagerProps): React.ReactElement {
-    const [tokens, setTokens] = useState([] as Token[]);
+    constructor(comms: Comms, renderer: Renderer, forceRender: () => void) {
+        this.comms = comms;
+        this.renderer = renderer;
 
-    function addToken(msg: PlaceTokenMessage): void {
-        if (msg.kind != TokenType.None) {
-            setTokens(tokens.concat([msg]));
+        comms.addPlaceTokenListener('TokenLayerAdd', msg => {
+            if (msg.kind != TokenType.None) {
+                this.tokens.push(msg);
+                forceRender();
+            }
+        });
+
+        comms.addDeleteTokenListener('TokenLayerDelete', ({ x, y }) => {
+            this.tokens = this.tokens.filter(token => token.x != x && token.y != y);
+        });
+
+        renderer.addRenderListener('TokenManagerRender', (ctx, cellSize) => {
+            this.hoveredIndex = -1;
+            for (let i = 0; i < this.tokens.length; ++i) {
+                const token = this.tokens[i];
+                let highlight = HighlightType.None;
+                if (token.x == this.mouseCoord.x && token.y == this.mouseCoord.y) {
+                    highlight = HighlightType.Hover;
+                    this.hoveredIndex = i;
+                }
+                if (i == this.selectedIndex) {
+                    highlight = HighlightType.Select;
+                }
+
+                drawToken(ctx, token.kind, token.x, token.y, cellSize, token.colour, highlight);
+            }
+        });
+    }
+
+    onClick(): void {
+        // find the hovered token if any
+        this.selectedIndex = -1;
+        for (let i = 0; i < this.tokens.length; ++i) {
+            const token = this.tokens[i];
+            if (token.x == this.mouseCoord.x && token.y == this.mouseCoord.y) {
+                this.selectedIndex = i;
+                break;
+            }
         }
     }
 
-    props.comms?.addPlaceTokenListener('TokenLayerAdd', addToken);
-    props.renderer.addRenderListener('TokenManagerRender', (ctx, cellSize) => {
-        for (const token of tokens) {
-            let highlight = HighlightType.None;
-            if (token.x == props.mouseHoverCoord.x && token.y == props.mouseHoverCoord.y) {
-                highlight = HighlightType.Hover;
-            }
-            if (props.selectedTokenCoord) {
-                if (token.x == props.selectedTokenCoord.x && token.y == props.selectedTokenCoord.y) {
-                    highlight = HighlightType.Select;
-                }
-            }
-
-            drawToken(ctx, token.kind, token.x, token.y, cellSize, token.colour, highlight);
+    onDelete(): void {
+        if (this.selectedIndex != -1) {
+            const selectedToken = this.tokens[this.selectedIndex];
+            this.comms.deleteToken(selectedToken.x, selectedToken.y);
         }
-    });
+    }
 
-    return null;
+    setMouseCoord(rawMouseCoord: Point): void {
+        this.mouseCoord = this.renderer.snapToGrid(this.renderer.transform(rawMouseCoord));
+    }
 }
