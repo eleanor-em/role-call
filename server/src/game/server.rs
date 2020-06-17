@@ -143,6 +143,7 @@ impl Server {
                     };
 
                     if proceed {
+                        let text = parsed.to_string();
                         info!("sending: {}", text);
                         let clients = self.clients.pin();
                         for tx in clients.values() {

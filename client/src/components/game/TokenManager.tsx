@@ -1,7 +1,7 @@
 import * as React from 'react';
-import {Comms, Movement, PlaceTokenMessage, uuidv4} from './CommsComponent';
-import { useState } from 'react';
+import {Comms, uuidv4} from './CommsComponent';
 import {Point, Renderer} from './GameStage';
+import {Anchor, PopupButton} from "./PopupButton";
 
 export enum TokenType {
     None,
@@ -116,10 +116,6 @@ export function getTokenCoord(token?: Token): Point {
 }
 
 
-const iconBackground = '#888888';
-const iconNotHighlighted = '#666666';
-const iconHighlighted = '#aaaaaa';
-
 class TentativeMovement {
     delta: Point;
     timestamp: Date;
@@ -143,6 +139,9 @@ export class TokenManager {
     tokens: Record<string, Token> = {};
     hoveredToken: Token = null;
     selectedToken: Token = null;
+    deleteButton: PopupButton = null;
+    optionButton: PopupButton = null;
+    forceRender: () => void;
 
     // Token ID -> Movement ID -> Movement
     // this exists to make movement feel more responsive to the user
@@ -151,6 +150,7 @@ export class TokenManager {
     constructor(comms: Comms, renderer: Renderer, forceRender: () => void) {
         this.comms = comms;
         this.renderer = renderer;
+        this.forceRender = forceRender;
 
         comms.addPlaceTokenListener('TokenLayerAdd', msg => {
             if (msg.kind != TokenType.None) {
@@ -160,6 +160,12 @@ export class TokenManager {
         });
 
         comms.addDeleteTokenListener('TokenLayerDelete', ({ token_id }) => {
+            if (this.selectedToken.id == token_id) {
+                this.selectedToken = null;
+                this.deleteButton = null;
+                this.optionButton = null;
+            }
+
             delete this.tokens[token_id];
         });
 
@@ -167,15 +173,24 @@ export class TokenManager {
             if (token_id in this.tentativeMovements) {
                 delete this.tentativeMovements[token_id][id];
             }
+            const delta = { x: dx, y: dy };
+            // todo: should use tentative structure
+            this.deleteButton?.onTokenMove(delta);
+            this.optionButton?.onTokenMove(delta);
+
             this.tokens[token_id].x += dx;
             this.tokens[token_id].y += dy;
             console.log(`moving token #${token_id} by (${dx}, ${dy})`);
         })
 
-        renderer.addRenderListener('TokenManagerRender', (ctx, cellSize) => {
+        renderer.addRenderListener('TokenManagerRender', (ctx, _) => {
             this.hoveredToken = null;
+            this.deleteButton?.render(ctx);
+            this.optionButton?.render(ctx);
+
             for (const token_id in this.tokens) {
                 const token = this.tokens[token_id];
+
                 // check tentative movements
                 let tx = token.x;
                 let ty = token.y;
@@ -190,6 +205,7 @@ export class TokenManager {
                     }
                 }
 
+                // check for hover/selection
                 let highlight = HighlightType.None;
                 if (tx == this.mouseCoord.x && ty == this.mouseCoord.y) {
                     highlight = HighlightType.Hover;
@@ -197,31 +213,49 @@ export class TokenManager {
                 }
                 if (this.selectedToken?.id == token_id) {
                     highlight = HighlightType.Select;
-                    this.drawDeleteIcon(ctx, tx, ty);
                 }
 
-                drawToken(ctx, token.kind, tx, ty, cellSize, token.colour, highlight);
+                drawToken(ctx, token.kind, tx, ty, this.renderer.cellSize, token.colour, highlight);
             }
         });
     }
 
-    drawDeleteIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
-        ctx.fillStyle = iconBackground;
-        ctx.beginPath();
-        ctx.arc(x, y, 10, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.fill();
+    onSelectToken(): void {
+        if (this.selectedToken == null) {
+            this.deleteButton = null;
+            this.optionButton = null;
+        } else {
+            this.deleteButton = new PopupButton(this.selectedToken.x, this.selectedToken.y,
+                this.renderer.cellSize, Anchor.TopLeft, '\uf014');
+            this.deleteButton.setMouseCoord(this.mouseCoord);
+
+            this.optionButton = new PopupButton(this.selectedToken.x, this.selectedToken.y,
+                this.renderer.cellSize, Anchor.TopRight, '\uf013');
+            this.optionButton.setMouseCoord(this.mouseCoord);
+
+            this.forceRender();
+        }
     }
 
     onClick(): void {
+        this.deleteButton?.onClick();
+        this.optionButton?.onClick();
+
+        const lastSelected = this.selectedToken;
+
         // find the hovered token if any
         this.selectedToken = null;
         for (const token_id in this.tokens) {
             const token = this.tokens[token_id];
+            console.log(`compare: token ${token_id}, (${token.x}, ${token.y}) vs (${this.mouseCoord.x}, ${this.mouseCoord.y})`);
             if (token.x == this.mouseCoord.x && token.y == this.mouseCoord.y) {
                 this.selectedToken = token;
                 break;
             }
+        }
+
+        if (lastSelected != this.selectedToken) {
+            this.onSelectToken();
         }
     }
 
@@ -260,6 +294,10 @@ export class TokenManager {
     }
 
     setMouseCoord(rawMouseCoord: Point): void {
-        this.mouseCoord = this.renderer.snapToGrid(this.renderer.transform(rawMouseCoord));
+        const relMouseCoord = this.renderer.transform(rawMouseCoord);
+
+        this.deleteButton?.setMouseCoord(relMouseCoord);
+        this.optionButton?.setMouseCoord(relMouseCoord);
+        this.mouseCoord = this.renderer.snapToGrid(relMouseCoord);
     }
 }
