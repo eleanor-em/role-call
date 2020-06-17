@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Comms, PlaceTokenMessage } from './CommsComponent';
+import {Comms, Movement, PlaceTokenMessage, uuidv4} from './CommsComponent';
 import { useState } from 'react';
 import {Point, Renderer} from './GameStage';
 
@@ -88,7 +88,15 @@ export function drawToken(ctx: CanvasRenderingContext2D,
     }
 }
 
+export enum ArrowKey {
+    Left,
+    Right,
+    Up,
+    Down
+}
+
 export interface Token {
+    id?: string,
     kind: TokenType,
     x: number,
     y: number,
@@ -107,13 +115,38 @@ export function getTokenCoord(token?: Token): Point {
     }
 }
 
+
+const iconBackground = '#888888';
+const iconNotHighlighted = '#666666';
+const iconHighlighted = '#aaaaaa';
+
+class TentativeMovement {
+    delta: Point;
+    timestamp: Date;
+
+    timeout = 1000;
+
+    constructor(delta: Point) {
+        this.delta = delta;
+        this.timestamp = new Date();
+    }
+
+    timedOut(): boolean {
+        return (new Date().getMilliseconds() - this.timestamp.getMilliseconds()) > this.timeout;
+    }
+}
+
 export class TokenManager {
     renderer: Renderer;
     comms: Comms;
     mouseCoord = { x: 0, y: 0};
-    tokens: Token[] = [];
-    hoveredIndex = -1;
-    selectedIndex = -1;
+    tokens: Record<string, Token> = {};
+    hoveredToken: Token = null;
+    selectedToken: Token = null;
+
+    // Token ID -> Movement ID -> Movement
+    // this exists to make movement feel more responsive to the user
+    tentativeMovements: Record<string, Record<string, TentativeMovement>> = {};
 
     constructor(comms: Comms, renderer: Renderer, forceRender: () => void) {
         this.comms = comms;
@@ -121,49 +154,108 @@ export class TokenManager {
 
         comms.addPlaceTokenListener('TokenLayerAdd', msg => {
             if (msg.kind != TokenType.None) {
-                this.tokens.push(msg);
+                this.tokens[msg.id] = msg;
                 forceRender();
             }
         });
 
-        comms.addDeleteTokenListener('TokenLayerDelete', ({ x, y }) => {
-            this.tokens = this.tokens.filter(token => token.x != x && token.y != y);
+        comms.addDeleteTokenListener('TokenLayerDelete', ({ token_id }) => {
+            delete this.tokens[token_id];
         });
 
+        comms.addMoveTokenListener('TokenLayerMove', ({ id, token_id, dx, dy }) => {
+            if (token_id in this.tentativeMovements) {
+                delete this.tentativeMovements[token_id][id];
+            }
+            this.tokens[token_id].x += dx;
+            this.tokens[token_id].y += dy;
+            console.log(`moving token #${token_id} by (${dx}, ${dy})`);
+        })
+
         renderer.addRenderListener('TokenManagerRender', (ctx, cellSize) => {
-            this.hoveredIndex = -1;
-            for (let i = 0; i < this.tokens.length; ++i) {
-                const token = this.tokens[i];
-                let highlight = HighlightType.None;
-                if (token.x == this.mouseCoord.x && token.y == this.mouseCoord.y) {
-                    highlight = HighlightType.Hover;
-                    this.hoveredIndex = i;
-                }
-                if (i == this.selectedIndex) {
-                    highlight = HighlightType.Select;
+            this.hoveredToken = null;
+            for (const token_id in this.tokens) {
+                const token = this.tokens[token_id];
+                // check tentative movements
+                let tx = token.x;
+                let ty = token.y;
+                for (const id in this.tentativeMovements[token_id]) {
+                    const move = this.tentativeMovements[token_id][id];
+
+                    if (move.timedOut()) {
+                        delete this.tentativeMovements[token_id][id];
+                    } else {
+                        tx += move.delta.x;
+                        ty += move.delta.y;
+                    }
                 }
 
-                drawToken(ctx, token.kind, token.x, token.y, cellSize, token.colour, highlight);
+                let highlight = HighlightType.None;
+                if (tx == this.mouseCoord.x && ty == this.mouseCoord.y) {
+                    highlight = HighlightType.Hover;
+                    this.hoveredToken = token;
+                }
+                if (this.selectedToken?.id == token_id) {
+                    highlight = HighlightType.Select;
+                    this.drawDeleteIcon(ctx, tx, ty);
+                }
+
+                drawToken(ctx, token.kind, tx, ty, cellSize, token.colour, highlight);
             }
         });
     }
 
+    drawDeleteIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
+        ctx.fillStyle = iconBackground;
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.fill();
+    }
+
     onClick(): void {
         // find the hovered token if any
-        this.selectedIndex = -1;
-        for (let i = 0; i < this.tokens.length; ++i) {
-            const token = this.tokens[i];
+        this.selectedToken = null;
+        for (const token_id in this.tokens) {
+            const token = this.tokens[token_id];
             if (token.x == this.mouseCoord.x && token.y == this.mouseCoord.y) {
-                this.selectedIndex = i;
+                this.selectedToken = token;
                 break;
             }
         }
     }
 
     onDelete(): void {
-        if (this.selectedIndex != -1) {
-            const selectedToken = this.tokens[this.selectedIndex];
-            this.comms.deleteToken(selectedToken.x, selectedToken.y);
+        if (this.selectedToken) {
+            this.comms.deleteToken(this.selectedToken.id);
+        }
+    }
+
+    onArrowKey(key: ArrowKey): void {
+        if (this.selectedToken) {
+            // construct the message
+            const delta = this.arrowKeyToDelta(key);
+            const id = uuidv4();
+            this.comms.moveToken(id, this.selectedToken.id, delta.x, delta.y);
+
+            // add to tentative movements for this token
+            if (!(this.selectedToken.id in this.tentativeMovements)) {
+                this.tentativeMovements[this.selectedToken.id] = {};
+            }
+            this.tentativeMovements[this.selectedToken.id][id] = new TentativeMovement(delta);
+        }
+    }
+
+    arrowKeyToDelta(key: ArrowKey): Point {
+        switch (key) {
+            case ArrowKey.Left:
+                return { x: -64, y: 0 };
+            case ArrowKey.Right:
+                return { x: 64, y: 0 };
+            case ArrowKey.Up:
+                return { x: 0, y: -64 };
+            case ArrowKey.Down:
+                return { x: 0, y: 64 };
         }
     }
 

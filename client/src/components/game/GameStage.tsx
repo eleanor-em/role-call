@@ -2,7 +2,7 @@ import * as React from 'react';
 import {useEffect, useState} from 'react';
 import '../../css/App.css';
 import {Comms} from './CommsComponent';
-import {drawToken, HighlightType, TokenManager, TokenType} from './TokenManager';
+import {ArrowKey, drawToken, HighlightType, TokenManager, TokenType} from './TokenManager';
 
 export interface Point {
     x: number,
@@ -300,9 +300,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
 
     function handleKeyDown(ev: any): void {
-        ev.preventDefault();
-
         const mods = {...modifiers};
+
         switch (ev.key) {
             case 'Control':
                 mods.ctrl = true;
@@ -315,6 +314,18 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 break;
             case 'Delete':
                 tokenManager?.onDelete();
+                break;
+            case 'ArrowLeft':
+                tokenManager?.onArrowKey(ArrowKey.Left);
+                break;
+            case 'ArrowRight':
+                tokenManager?.onArrowKey(ArrowKey.Right);
+                break;
+            case 'ArrowUp':
+                tokenManager?.onArrowKey(ArrowKey.Up);
+                break;
+            case 'ArrowDown':
+                tokenManager?.onArrowKey(ArrowKey.Down);
                 break;
         }
 
@@ -340,7 +351,6 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
 
     function handleKeyPress(ev: any): void {
-        console.log(ev.key);
         if (ev.key == ' ') {
             setTranslation({ x: 0, y: 0 });
             setScale(1);
@@ -376,7 +386,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             } else if (mods.ctrl) {
                 startHideToken();
                 setCursor('zoom-in');
-            } else if (tokenManager?.hoveredIndex != -1) {
+            } else if (tokenManager?.hoveredToken) {
                 setCursor('pointer');
             } else {
                 setCursor('default');

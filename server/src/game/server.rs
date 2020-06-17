@@ -121,7 +121,12 @@ impl Server {
         match msg {
             ProtocolMessage::PlaceToken { .. } |
             ProtocolMessage::DeleteToken { .. } => { from_host },
-
+            ProtocolMessage::Movement { token_id, .. } => {
+                from_host || {
+                    let state = self.state.lock().unwrap();
+                    Some(token_id.to_string()) == state.get_owner(token_id)
+                }
+            }
             ProtocolMessage::Connect { .. } |
             ProtocolMessage::Disconnect { .. } |
             ProtocolMessage::FailedConnection { .. } => { true },

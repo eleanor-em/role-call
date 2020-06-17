@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ProtocolMessage {
     PlaceToken(Token),
-    DeleteToken { x: i16, y: i16 },
+    DeleteToken { token_id: String },
+    Movement { id: String, token_id: String, dx: i16, dy: i16 },
     Connect { username: String, host: bool },
     Disconnect { username: String },
     FailedConnection { reason: String },
@@ -28,6 +29,7 @@ impl Into<RawMessage> for ProtocolMessage {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Token {
+    pub id: Option<String>,
     pub kind: String,
     pub x: i16,
     pub y: i16,
