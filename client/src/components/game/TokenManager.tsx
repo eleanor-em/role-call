@@ -2,6 +2,7 @@ import * as React from 'react';
 import {Comms, uuidv4} from './CommsComponent';
 import {Point, Renderer} from './GameStage';
 import {Anchor, PopupButton} from "./PopupButton";
+import {StoredPlayer} from "./GameLanding";
 
 export enum TokenType {
     None,
@@ -141,21 +142,24 @@ export class TokenManager {
     selectedToken: Token = null;
     deleteButton: PopupButton = null;
     optionButton: PopupButton = null;
-    forceRender: () => void;
+    options: Options = null;
+
+    setForcePointer: (force: boolean) => void;
+    players: StoredPlayer[] = [];
 
     // Token ID -> Movement ID -> Movement
     // this exists to make movement feel more responsive to the user
     tentativeMovements: Record<string, Record<string, TentativeMovement>> = {};
 
-    constructor(comms: Comms, renderer: Renderer, forceRender: () => void) {
+    constructor(comms: Comms, renderer: Renderer, setForcePointer: (force: boolean) => void) {
         this.comms = comms;
         this.renderer = renderer;
-        this.forceRender = forceRender;
+        this.setForcePointer = setForcePointer;
 
         comms.addPlaceTokenListener('TokenLayerAdd', msg => {
             if (msg.kind != TokenType.None) {
                 this.tokens[msg.id] = msg;
-                forceRender();
+                // forceRender();
             }
         });
 
@@ -180,8 +184,7 @@ export class TokenManager {
 
             this.tokens[token_id].x += dx;
             this.tokens[token_id].y += dy;
-            console.log(`moving token #${token_id} by (${dx}, ${dy})`);
-        })
+        });
 
         renderer.addRenderListener('TokenManagerRender', (ctx, _) => {
             this.hoveredToken = null;
@@ -217,29 +220,32 @@ export class TokenManager {
 
                 drawToken(ctx, token.kind, tx, ty, this.renderer.cellSize, token.colour, highlight);
             }
+
+            this.options?.render(ctx);
         });
     }
 
     onSelectToken(): void {
+        this.options = null;
         if (this.selectedToken == null) {
             this.deleteButton = null;
             this.optionButton = null;
         } else {
             this.deleteButton = new PopupButton(this.selectedToken.x, this.selectedToken.y,
-                this.renderer.cellSize, Anchor.TopLeft, '\uf014');
-            this.deleteButton.setMouseCoord(this.mouseCoord);
+                this.renderer.cellSize, Anchor.TopLeft, '\uf014', this.setForcePointer,
+                () => this.onDelete());
 
             this.optionButton = new PopupButton(this.selectedToken.x, this.selectedToken.y,
-                this.renderer.cellSize, Anchor.TopRight, '\uf013');
-            this.optionButton.setMouseCoord(this.mouseCoord);
-
-            this.forceRender();
+                this.renderer.cellSize, Anchor.TopRight, '\uf013', this.setForcePointer,
+                () => this.onShowOptions());
         }
     }
 
     onClick(): void {
-        this.deleteButton?.onClick();
-        this.optionButton?.onClick();
+        // check if we clicked on a button
+        if (this.deleteButton?.onClick() || this.optionButton?.onClick()) {
+            return;
+        }
 
         const lastSelected = this.selectedToken;
 
@@ -247,7 +253,6 @@ export class TokenManager {
         this.selectedToken = null;
         for (const token_id in this.tokens) {
             const token = this.tokens[token_id];
-            console.log(`compare: token ${token_id}, (${token.x}, ${token.y}) vs (${this.mouseCoord.x}, ${this.mouseCoord.y})`);
             if (token.x == this.mouseCoord.x && token.y == this.mouseCoord.y) {
                 this.selectedToken = token;
                 break;
@@ -259,9 +264,19 @@ export class TokenManager {
         }
     }
 
+    onShowOptions(): void {
+        if (this.selectedToken) {
+            this.options = new Options(this.selectedToken.x, this.selectedToken.y, this.renderer.cellSize,
+                this.players, this.setForcePointer);
+            this.options.setMouseCoord(this.mouseCoord);
+        }
+    }
+
     onDelete(): void {
         if (this.selectedToken) {
-            this.comms.deleteToken(this.selectedToken.id);
+            if (confirm('Delete this token?')) {
+                this.comms.deleteToken(this.selectedToken.id);
+            }
         }
     }
 
@@ -295,9 +310,102 @@ export class TokenManager {
 
     setMouseCoord(rawMouseCoord: Point): void {
         const relMouseCoord = this.renderer.transform(rawMouseCoord);
-
         this.deleteButton?.setMouseCoord(relMouseCoord);
         this.optionButton?.setMouseCoord(relMouseCoord);
+        this.options?.setMouseCoord(relMouseCoord);
+
         this.mouseCoord = this.renderer.snapToGrid(relMouseCoord);
+    }
+}
+
+class Options {
+    padding = 10;
+    hExtraPadding = 32;
+    x: number;
+    y: number;
+    players: StoredPlayer[];
+
+    lineHeight = 0;
+    lineWidth = 0;
+    font: string;
+
+    mouseCoord: Point;
+    hoveredName: String;
+
+    setForcePointer: (force: boolean) => void;
+
+    constructor(cellX: number, cellY: number, cellSize: number, players: StoredPlayer[],
+                setForcePointer: (force: boolean) => void) {
+        const xOffset = 30;
+        const yOffset = 12;
+        this.x = cellX + cellSize + xOffset;
+        this.y = cellY + yOffset;
+        this.players = players;
+        this.setForcePointer = setForcePointer;
+    }
+
+    calculateSizes(ctx: CanvasRenderingContext2D) {
+        if (this.lineHeight == 0) {
+            // hack: height is roughly equal to the width of M
+            // load the font from the DOM
+            const elem = document.getElementsByTagName('body')[0];
+            const fontParts = window.getComputedStyle(elem, null)
+                .getPropertyValue('font-family')
+                .split(' ');
+            // Extract the family name
+            fontParts.shift();
+            this.font = `20px ${fontParts.join(' ')}`;
+            ctx.font = this.font;
+            // add 1 for border
+            this.lineHeight = ctx.measureText('M').width + 1;
+
+            // find longest name
+            this.lineWidth = this.players.map(player => ctx.measureText(player.name).width)
+                    .reduce((acc, cur) => cur > acc ? cur : acc, 0)
+                + this.padding;
+        }
+    }
+
+    render(ctx: CanvasRenderingContext2D): void {
+        this.calculateSizes(ctx);
+
+        // Draw menu background
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#0f111a';
+        this.hoveredName = null;
+
+        for (const i in this.players) {
+            const name = this.players[i].name;
+
+            const x = this.x - this.padding;
+            const y = this.y + parseInt(i) * this.lineHeight - this.padding;
+            const w = this.lineWidth + this.padding + this.hExtraPadding;
+            const h = this.lineHeight + this.padding;
+
+            if (this.mouseCoord.x > x && this.mouseCoord.x < x + w
+                    && this.mouseCoord.y > y && this.mouseCoord.y < y + h) {
+                this.hoveredName = name;
+                ctx.fillStyle = '#444C7B';
+            } else {
+                ctx.fillStyle = '#2D3354';
+            }
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeRect(x, y, w, h);
+
+            ctx.font = this.font;
+            ctx.fillStyle = '#e2cca4';
+            ctx.fillText(name, x + this.padding, y + h - this.padding / 2);
+        }
+
+
+        if (this.hoveredName) {
+            this.setForcePointer(true);
+        } else {
+            this.setForcePointer(false);
+        }
+    }
+
+    setMouseCoord(relMouseCoord: Point): void {
+        this.mouseCoord = relMouseCoord;
     }
 }

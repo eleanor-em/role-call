@@ -17,7 +17,7 @@ export interface GameLandingProps {
     setMessage(msg: string): void,
 }
 
-interface StoredPlayer {
+export interface StoredPlayer {
     name: string,
     host: boolean,
 }
@@ -89,7 +89,7 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
     ) : (
         <div style={{display: 'flex', flex: 1}}>
             <div className="GameContainer">
-                <GameStage comms={comms} tokenColour={tokenColour} tokenType={tokenType} setTokenType={setTokenType} />
+                <GameStage comms={comms} players={players} tokenColour={tokenColour} tokenType={tokenType} setTokenType={setTokenType} />
             </div>
             <div className="GameSidebar">
                 <div className="GameGreeting">

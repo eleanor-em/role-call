@@ -22,11 +22,16 @@ export class PopupButton {
     x: number;
     y: number;
     content: string;
-    hovered: boolean;
+    hovered = false;
 
-    constructor(cellX: number, cellY: number, cellSize: number, anchor: Anchor, content: string) {
+    setForcePointer: (force: boolean) => void;
+    handleClickAction: () => void;
+
+    constructor(cellX: number, cellY: number, cellSize: number, anchor: Anchor, content: string,
+                setForcePointer: (force: boolean) => void, handleClickAction: () => void) {
         this.content = content;
-        this.hovered = false;
+        this.setForcePointer = setForcePointer;
+        this.handleClickAction = handleClickAction;
 
         switch (anchor) {
             case Anchor.TopLeft:
@@ -48,7 +53,6 @@ export class PopupButton {
                 this.x = cellX + cellSize + this.offsetX;
                 this.y = cellY + cellSize + this.offsetY;
                 break;
-
         }
     }
 
@@ -58,8 +62,16 @@ export class PopupButton {
         const top = this.y - this.radius;
         const bottom = this.y + this.radius;
 
-        this.hovered = relMouseCoord.x > left && relMouseCoord.x <  right
-            && relMouseCoord.y > top && relMouseCoord.y < bottom;
+        if (relMouseCoord.x > left && relMouseCoord.x <  right
+            && relMouseCoord.y > top && relMouseCoord.y < bottom) {
+            this.hovered = true;
+            this.setForcePointer(true);
+        } else {
+            if (this.hovered) {
+                this.hovered = false;
+                this.setForcePointer(false);
+            }
+        }
     }
 
     onTokenMove(delta: Point): void {
@@ -67,8 +79,14 @@ export class PopupButton {
         this.y += delta.y;
     }
 
-    onClick(): void {
-2
+    // returns true if the action was performed
+    onClick(): boolean {
+        if (this.hovered) {
+            this.handleClickAction();
+            return true;
+        } else {
+            return false;
+        }
     }
 
     render(ctx: CanvasRenderingContext2D): void {

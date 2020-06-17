@@ -3,6 +3,7 @@ import {useEffect, useState} from 'react';
 import '../../css/App.css';
 import {Comms} from './CommsComponent';
 import {ArrowKey, drawToken, HighlightType, TokenManager, TokenType} from './TokenManager';
+import {StoredPlayer} from "./GameLanding";
 
 export interface Point {
     x: number,
@@ -14,6 +15,7 @@ export interface GameStageProps {
     tokenColour: string,
     tokenType: TokenType,
     setTokenType(type: TokenType): void,
+    players: StoredPlayer[],
 }
 
 export class Renderer {
@@ -108,22 +110,9 @@ let renderer: Renderer = null;
 let tokenManager: TokenManager = null;
 
 export function GameStage(props: GameStageProps): React.ReactElement {
-    // set up initial objects
-    if (renderer == null) {
-        renderer = new Renderer();
-    }
-
-    if (tokenManager == null && props.comms != null) {
-        tokenManager = new TokenManager(props.comms, renderer, forceRender);
-    }
-
-    useEffect(() => {
-        renderer.width = window.innerWidth * 4 / 5;
-        renderer.height = window.innerHeight * 0.96;
-    }, [window.innerWidth, window.innerHeight]);
-
     const [hideToken, setHideToken] = useState(false);
     const [cursor, setCursor] = useState('default');
+    const [forcePointer, setForcePointer] = useState(false);
 
     const [mouseCoord, setMouseCoord] = useState({ x: 0, y: 0 });
     // grid coord is used to hook updates since we don't need to update if we haven't moved to a new cell
@@ -140,15 +129,32 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     });
     const [hoverCanvas, setHoverCanvas] = useState(false);
 
+    // Set up initial objects
+    if (renderer == null) {
+        renderer = new Renderer();
+    }
+    if (tokenManager == null && props.comms != null) {
+        tokenManager = new TokenManager(props.comms, renderer, setForcePointer);
+    }
+    useEffect(() => {
+        renderer.width = window.innerWidth * 4 / 5;
+        renderer.height = window.innerHeight * 0.96;
+    }, [window.innerWidth, window.innerHeight]);
+
+    // Update the token manager every time we get a new player list
+    tokenManager.players = props.players;
+
     // Invert this flag to force a re-render despite useEffect tags
     const [forceRenderFlag, setForceRender] = useState(false);
     function forceRender() {
         setForceRender(!forceRenderFlag);
     }
+    // Render at 20 fps
+    window.setInterval(() => forceRender(), 20);
 
+    // Set shadow token data
     if (!hideToken && typeToPlace != props.tokenType) {
         typeToPlace = props.tokenType;
-        forceRender();
     }
     if (hideToken && prevTypeToPlace != props.tokenType) {
         prevTypeToPlace = props.tokenType;
@@ -223,12 +229,11 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             onPlaceToken(mouse);
         } else {
             tokenManager?.onClick();
-            forceRender();
         }
     }
 
     function onPlaceToken(mouse: Point): void {
-        // send a place message and reset the selected type
+        // send a place message and reset the selected typeStoredPlayer
         const { x, y } = renderer.snapToGrid(renderer.transform(mouse));
         props.comms?.placeToken(typeToPlace, x, y, props.tokenColour);
         props.setTokenType(TokenType.None);
@@ -259,7 +264,6 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             prevTypeToPlace = typeToPlace;
             typeToPlace = TokenType.None;
             setHideToken(true);
-            forceRender();
         }
     }
 
@@ -268,7 +272,6 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             typeToPlace = prevTypeToPlace;
             prevTypeToPlace = TokenType.None;
             setHideToken(false);
-            forceRender();
         }
     }
 
@@ -366,7 +369,6 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
         updateCursor(mods);
         setModifiers(mods);
-        forceRender()
     }
 
     function handleOnWheel(ev: any): void {
@@ -407,6 +409,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         renderer.render(translation, scale);
     }, [translation, mouseGridCoord, scale, modifiers, forceRenderFlag]);
 
+    const finalCursor = forcePointer ? 'pointer' : cursor;
 
     return (
         <>
@@ -418,7 +421,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 onMouseEnter={handleMouseEnter}
                 onWheel={handleOnWheel}
                 onContextMenu={e => e.preventDefault()} // disable context menu
-                style={{ cursor, border: '1px solid white' }}
+                style={{ cursor: finalCursor, border: '1px solid white' }}
             />
         </>
     );
