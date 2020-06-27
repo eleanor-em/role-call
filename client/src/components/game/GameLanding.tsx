@@ -44,19 +44,23 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
         const player = { name: msg.username, host: msg.host };
         if (player.name == props.user.username && player.host) {
             setIsHost(true);
+            comms.isHost = true;
         }
 
+        // check that we didn't already have this player
         for (const existing of players) {
             if (existing.name == player.name) {
                 return;
             }
         }
 
+        // put host first
         if (player.host) {
             setPlayers([player].concat(players));
         } else {
             setPlayers(players.concat([player]));
         }
+
     });
 
     comms?.addDisconnectListener('GameLandingDisconnect', msg => {

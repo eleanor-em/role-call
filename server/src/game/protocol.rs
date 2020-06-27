@@ -5,6 +5,7 @@ pub enum ProtocolMessage {
     PlaceToken(Token),
     DeleteToken { token_id: String },
     Movement { id: String, token_id: String, dx: i16, dy: i16 },
+    SetController {token_id: String, new_controller: String },
     Connect { username: String, host: bool },
     Disconnect { username: String },
     FailedConnection { reason: String },

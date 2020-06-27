@@ -216,6 +216,7 @@ export class TokenManager {
                 }
                 if (this.selectedToken?.id == token_id) {
                     highlight = HighlightType.Select;
+                    this.options?.updatePosition(tx, ty, this.renderer.cellSize);
                 }
 
                 drawToken(ctx, token.kind, tx, ty, this.renderer.cellSize, token.colour, highlight);
@@ -226,6 +227,11 @@ export class TokenManager {
     }
 
     onSelectToken(): void {
+        // check that we are host, if not don't show options
+        if (!this.comms.isHost) {
+            return;
+        }
+
         this.options = null;
         if (this.selectedToken == null) {
             this.deleteButton = null;
@@ -242,6 +248,13 @@ export class TokenManager {
     }
 
     onClick(): void {
+        // check if we clicked on a dropdown box
+        if (this.options?.onClick()) {
+            return;
+        }
+        // if not, hide the dropdown
+        this.options = null;
+
         // check if we clicked on a button
         if (this.deleteButton?.onClick() || this.optionButton?.onClick()) {
             return;
@@ -267,7 +280,8 @@ export class TokenManager {
     onShowOptions(): void {
         if (this.selectedToken) {
             this.options = new Options(this.selectedToken.x, this.selectedToken.y, this.renderer.cellSize,
-                this.players, this.setForcePointer);
+                this.players, new_controller => this.comms.setController(this.selectedToken.id, new_controller),
+                this.setForcePointer);
             this.options.setMouseCoord(this.mouseCoord);
         }
     }
@@ -319,7 +333,7 @@ export class TokenManager {
 }
 
 class Options {
-    padding = 10;
+    padding = 14;
     hExtraPadding = 32;
     x: number;
     y: number;
@@ -330,18 +344,25 @@ class Options {
     font: string;
 
     mouseCoord: Point;
-    hoveredName: String;
+    hoveredName: string;
+    setController: (new_controller: string) => void;
 
     setForcePointer: (force: boolean) => void;
 
     constructor(cellX: number, cellY: number, cellSize: number, players: StoredPlayer[],
-                setForcePointer: (force: boolean) => void) {
+                setController: (new_controller: string) => void, setForcePointer: (force: boolean) => void) {
+        this.updatePosition(cellX, cellY, cellSize);
+        this.players = players;
+        this.setController = setController;
+        this.setForcePointer = setForcePointer;
+    }
+
+    updatePosition(cellX: number, cellY: number, cellSize: number) {
         const xOffset = 30;
         const yOffset = 12;
+
         this.x = cellX + cellSize + xOffset;
         this.y = cellY + yOffset;
-        this.players = players;
-        this.setForcePointer = setForcePointer;
     }
 
     calculateSizes(ctx: CanvasRenderingContext2D) {
@@ -374,11 +395,12 @@ class Options {
         ctx.strokeStyle = '#0f111a';
         this.hoveredName = null;
 
+        // Draw player selections
         for (const i in this.players) {
             const name = this.players[i].name;
 
             const x = this.x - this.padding;
-            const y = this.y + parseInt(i) * this.lineHeight - this.padding;
+            const y = this.y + parseInt(i) * (this.lineHeight  + this.padding) - this.padding;
             const w = this.lineWidth + this.padding + this.hExtraPadding;
             const h = this.lineHeight + this.padding;
 
@@ -397,11 +419,20 @@ class Options {
             ctx.fillText(name, x + this.padding, y + h - this.padding / 2);
         }
 
-
+        // TODO: this overwrites the buttons' settings
         if (this.hoveredName) {
             this.setForcePointer(true);
         } else {
             this.setForcePointer(false);
+        }
+    }
+
+    onClick(): boolean {
+        if (this.hoveredName) {
+            this.setController(this.hoveredName);
+            return true;
+        } else {
+            return false;
         }
     }
 

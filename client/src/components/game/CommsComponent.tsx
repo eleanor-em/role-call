@@ -18,6 +18,11 @@ export interface MoveTokenMessage {
     dy: number,
 }
 
+export interface SetControllerMessage {
+    token_id: string,
+    new_controller: string,
+}
+
 export interface ConnectMessage {
     username: string,
     host: boolean,
@@ -41,11 +46,13 @@ export class Comms {
     socket: W3cWebSocket;
     placeTokenListeners: Record<string, (msg: PlaceTokenMessage) => void> = {};
     deleteTokenListeners: Record<string, (msg: DeleteTokenMessage) => void> = {};
+    setControllerListeners: Record<string, (msg: SetControllerMessage) => void> = {};
     moveTokenListeners: Record<string, (msg: MoveTokenMessage) => void> = {};
     connectListeners: Record<string, (msg: ConnectMessage) => void> = {};
     disconnectListeners: Record<string, (msg: DisconnectMessage) => void> = {};
     failedListeners: Record<string, (msg: FailedConnectionMessage) => void> = {};
-    shouldShowRefresh: boolean = true;
+    shouldShowRefresh = true;
+    isHost = false;
 
     constructor(socket: W3cWebSocket, props: CommsProps) {
         this.socket = socket;
@@ -76,6 +83,10 @@ export class Comms {
                 }
                 case 'Movement': {
                     Object.values(this.moveTokenListeners).forEach(op => op(data));
+                    break;
+                }
+                case 'SetController': {
+                    Object.values(this.setControllerListeners).forEach(op => op(data));
                     break;
                 }
                 case 'Connect': {
@@ -116,6 +127,12 @@ export class Comms {
         }));
     }
 
+    setController(token_id: string, new_controller: string): void {
+        this.socket.send(JSON.stringify({
+            SetController: { token_id, new_controller }
+        }));
+    }
+
     // Listeners should use a unique reference string, to prevent duplicate listeners.
     addPlaceTokenListener(ref: string, listener: ((msg: PlaceTokenMessage) => void)): void {
         this.placeTokenListeners[ref] = listener;
@@ -127,6 +144,10 @@ export class Comms {
 
     addMoveTokenListener(ref: string, listener: ((msg: MoveTokenMessage) => void)): void {
         this.moveTokenListeners[ref] = listener;
+    }
+
+    addSetControllerListener(ref: string, listener: ((msg: SetControllerMessage) => void)): void {
+        this.setControllerListeners[ref] = listener;
     }
 
     addConnectListener(ref: string, listener: ((msg: ConnectMessage) => void)): void {
@@ -149,6 +170,7 @@ export interface CommsProps {
     onDisconnect(): void,
 }
 
+// TODO: refactor
 export function CommsComponent(props: CommsProps): Comms {
     return new Comms(new W3cWebSocket(process.env.RC_WEBSOCKET_URL), props);
 }

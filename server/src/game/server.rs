@@ -1,11 +1,11 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::collections::HashMap;
 
-use tokio_tungstenite::tungstenite::Message;
 use crate::game::protocol::ProtocolMessage;
-use std::sync::mpsc::SyncSender;
 use std::hash::{Hash, Hasher};
+use std::sync::mpsc::SyncSender;
+use tokio_tungstenite::tungstenite::Message;
 
 use tokio::time::Instant;
 
@@ -68,7 +68,12 @@ impl Server {
         let clients = flurry::HashMap::new();
         let state = Mutex::new(GameState::new(host));
         let keepalive = Mutex::new(Some(Instant::now()));
-        Self { game_token, clients, state, keepalive }
+        Self {
+            game_token,
+            clients,
+            state,
+            keepalive,
+        }
     }
 
     fn has_client(&self, user: &UserInfo) -> bool {
@@ -79,10 +84,13 @@ impl Server {
         // Send existing client info
         let clients = self.clients.pin();
         for user in clients.keys() {
-            if let Err(e) = tx.send(ProtocolMessage::Connect {
-                username: user.username.clone(),
-                host: user.is_host,
-            }.to_string()) {
+            if let Err(e) = tx.send(
+                ProtocolMessage::Connect {
+                    username: user.username.clone(),
+                    host: user.is_host,
+                }
+                .to_string(),
+            ) {
                 warn!("failed sending users: {}", e);
             }
         }
@@ -94,10 +102,16 @@ impl Server {
 
         clients.insert(user.clone(), tx);
         info!("New client for game {}: {}", self.game_token, user.token);
-        self.recv(ProtocolMessage::Connect {
-            username: user.username,
-            host: user.is_host,
-        }.into(), user.is_host).await;
+        let username = user.username.clone();
+        self.recv(
+            ProtocolMessage::Connect {
+                username,
+                host: user.is_host,
+            }
+            .into(),
+            user,
+        )
+        .await;
     }
 
     pub fn close_client(&self, user: UserInfo) {
@@ -105,9 +119,12 @@ impl Server {
         clients.remove(&user);
         for client in clients.values() {
             info!("Sending disconnect update for {}", user.username);
-            if let Err(e) = client.send(ProtocolMessage::Disconnect {
-                username: user.username.clone()
-            }.to_string()) {
+            if let Err(e) = client.send(
+                ProtocolMessage::Disconnect {
+                    username: user.username.clone(),
+                }
+                .to_string(),
+            ) {
                 warn!("Failed sending disconnect update: {}", e);
             }
         }
@@ -117,26 +134,27 @@ impl Server {
         }
     }
 
-    fn authorised(&self, msg: &ProtocolMessage, from_host: bool) -> bool {
+    fn authorised(&self, msg: &ProtocolMessage, user: UserInfo) -> bool {
         match msg {
-            ProtocolMessage::PlaceToken { .. } |
-            ProtocolMessage::DeleteToken { .. } => { from_host },
+            ProtocolMessage::PlaceToken { .. }
+            | ProtocolMessage::DeleteToken { .. }
+            | ProtocolMessage::SetController { .. } => user.is_host,
             ProtocolMessage::Movement { token_id, .. } => {
-                from_host || {
+                user.is_host || {
                     let state = self.state.lock().unwrap();
-                    Some(token_id.to_string()) == state.get_owner(token_id)
+                    Some(user.username) == state.get_owner(token_id)
                 }
             }
-            ProtocolMessage::Connect { .. } |
-            ProtocolMessage::Disconnect { .. } |
-            ProtocolMessage::FailedConnection { .. } => { true },
+            ProtocolMessage::Connect { .. }
+            | ProtocolMessage::Disconnect { .. }
+            | ProtocolMessage::FailedConnection { .. } => true,
         }
     }
 
-    pub async fn recv(&self, msg: Message, from_host: bool) {
+    pub async fn recv(&self, msg: Message, user: UserInfo) {
         if let Ok(text) = msg.to_text() {
             if let Ok(mut parsed) = serde_json::from_str::<ProtocolMessage>(&text) {
-                if self.authorised(&parsed, from_host) {
+                if self.authorised(&parsed, user) {
                     let proceed = {
                         let mut state = self.state.lock().unwrap();
                         state.process(&mut parsed)
@@ -167,14 +185,16 @@ impl Server {
     }
 }
 
-pub fn connect_to_server(user: UserInfo, game_token: String, tx: SyncSender<String>)
-        -> Result<Arc<Server>, GameError> {
+pub fn connect_to_server(
+    user: UserInfo,
+    game_token: String,
+    tx: SyncSender<String>,
+) -> Result<Arc<Server>, GameError> {
     let mut servers = SERVERS.lock().unwrap();
-    let server = servers.entry(game_token.clone())
-        .or_insert_with(|| {
-            info!("Create server for game {}", game_token);
-            Arc::new(Server::new(user.clone(), game_token))
-        });
+    let server = servers.entry(game_token.clone()).or_insert_with(|| {
+        info!("Create server for game {}", game_token);
+        Arc::new(Server::new(user.clone(), game_token))
+    });
     if !server.has_client(&user) {
         futures::executor::block_on(server.add_client(user, tx));
         Ok(Arc::clone(server))

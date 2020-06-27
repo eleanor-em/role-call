@@ -1,17 +1,19 @@
-use std::fmt::{Formatter, Display};
+use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
 
-use futures::{StreamExt, SinkExt};
 use futures::stream::SplitSink;
+use futures::{SinkExt, StreamExt};
 
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{tungstenite::Message, accept_async, tungstenite::Error as WsError, WebSocketStream};
+use tokio_tungstenite::{
+    accept_async, tungstenite::Error as WsError, tungstenite::Message, WebSocketStream,
+};
 
 use crate::db::{DbManager, GamePermission};
-use crate::game::server::{connect_to_server, UserInfo};
 use crate::game::protocol::ProtocolMessage;
+use crate::game::server::{connect_to_server, UserInfo};
 
 #[derive(Debug)]
 pub enum GameError {
@@ -58,7 +60,11 @@ impl GameConnection {
             if let Some(Ok(game_token)) = ws.next().await {
                 let game_token = game_token.into_text()?.trim().to_string();
                 info!("received game token: {}", game_token);
-                Ok(Self { ws, user_token, game_token })
+                Ok(Self {
+                    ws,
+                    user_token,
+                    game_token,
+                })
             } else {
                 warn!("malformed game token");
                 Err(GameError::Malformed)
@@ -70,23 +76,37 @@ impl GameConnection {
     }
 
     async fn start(mut self, db: Arc<DbManager>) {
-        match db.check_game_permissions(&self.user_token, &self.game_token).await {
+        match db
+            .check_game_permissions(&self.user_token, &self.game_token)
+            .await
+        {
             Ok(GamePermission::None) => {
                 warn!("failed game verification: user not in game");
-            },
+            }
             Err(e) => {
                 warn!("failed game verification: {}", e);
-                if let Err(e) = self.ws.send(ProtocolMessage::FailedConnection {
-                            reason: "could not find game".to_string()
-                        }.into_msg()).await {
+                if let Err(e) = self
+                    .ws
+                    .send(
+                        ProtocolMessage::FailedConnection {
+                            reason: "could not find game".to_string(),
+                        }
+                        .into_msg(),
+                    )
+                    .await
+                {
                     warn!("failed to send error to client: {}", e);
                 }
-            },
+            }
             Ok(perm) => {
                 // Load user information
                 match db.get_account(&self.user_token).await {
                     Ok((_, username)) => {
-                        let user = UserInfo { token: self.user_token, username, is_host: perm == GamePermission::Host };
+                        let user = UserInfo {
+                            token: self.user_token,
+                            username,
+                            is_host: perm == GamePermission::Host,
+                        };
                         let (tx, rx) = std::sync::mpsc::sync_channel(100);
                         if let Ok(server) = connect_to_server(user.clone(), self.game_token, tx) {
                             // Create communication channels and spawn handlers
@@ -97,29 +117,39 @@ impl GameConnection {
                             info!("verified connection");
                             while let Some(result) = reader.next().await {
                                 match result {
-                                    Ok(result) => server.recv(result, user.is_host).await,
+                                    Ok(result) => server.recv(result, user.clone()).await,
                                     Err(e) => warn!("error running connection: {}", e),
                                 }
                             }
                             server.close_client(user);
                         } else {
                             warn!("user already connected");
-                            if let Err(e) = self.ws.send(ProtocolMessage::FailedConnection {
-                                reason: "user already connected".to_string()
-                            }.into_msg()).await {
+                            if let Err(e) = self
+                                .ws
+                                .send(
+                                    ProtocolMessage::FailedConnection {
+                                        reason: "user already connected".to_string(),
+                                    }
+                                    .into_msg(),
+                                )
+                                .await
+                            {
                                 warn!("failed to send error to client: {}", e);
                             }
                         }
-                    },
+                    }
                     Err(e) => {
                         warn!("error retrieving account information: {}", e);
                     }
                 }
-            },
+            }
         }
     }
 
-    fn forward_messages(mut writer: SplitSink<WebSocketStream<TcpStream>, Message>, rx: Receiver<String>) {
+    fn forward_messages(
+        mut writer: SplitSink<WebSocketStream<TcpStream>, Message>,
+        rx: Receiver<String>,
+    ) {
         // Listen to the receiver and forward any received messages to the websocket
         while let Ok(msg) = rx.recv() {
             if let Err(e) = futures::executor::block_on(writer.send(Message::Text(msg))) {
