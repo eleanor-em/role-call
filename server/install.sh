@@ -1,1 +1,1 @@
-sudo apt install postgresql postgresql-contrib clang llvm-dev libclang-dev
+sudo apt install postgresql postgresql-contrib clang llvm-dev libclang-dev libssl-dev

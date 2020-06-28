@@ -1,9 +1,12 @@
+#[macro_use]
+extern crate log;
+
 #[cfg(test)]
 mod tests {
-    use rolecall::web::Api;
     use rolecall::db::DbManager;
-    use std::sync::Arc;
+    use rolecall::web::Api;
     use std::collections::HashMap;
+    use std::sync::Arc;
     use std::thread;
 
     async fn new_test_user(db: &DbManager, name: &str) -> String {
@@ -31,12 +34,15 @@ mod tests {
         user_map.insert("nickname", email);
 
         let client = reqwest::Client::new();
-        let res: rolecall::web::UserResponse = client.post("http://localhost:8000/api/users")
+        let res: rolecall::web::UserResponse = client
+            .post("http://localhost:8000/api/users")
             .json(&user_map)
             .send()
-            .await.unwrap()
+            .await
+            .unwrap()
             .json()
-            .await.unwrap();
+            .await
+            .unwrap();
         assert!(res.status);
         assert!(res.msg.is_none());
         assert!(res.token.is_none());
@@ -51,12 +57,15 @@ mod tests {
         user_map.insert("email", email);
         user_map.insert("password", pw);
         user_map.insert("nickname", email);
-        let res: rolecall::web::UserResponse = client.post("http://localhost:8000/api/users/auth")
+        let res: rolecall::web::UserResponse = client
+            .post("http://localhost:8000/api/users/auth")
             .json(&user_map)
             .send()
-            .await.unwrap()
+            .await
+            .unwrap()
             .json()
-            .await.unwrap();
+            .await
+            .unwrap();
         assert!(res.status);
         assert!(res.msg.is_none());
         assert!(res.token.is_some());
@@ -65,12 +74,15 @@ mod tests {
         // Try with incorrect password
         let pw = "not-password";
         user_map.insert("password", pw);
-        let res: rolecall::web::UserResponse = client.post("http://localhost:8000/api/users/auth")
+        let res: rolecall::web::UserResponse = client
+            .post("http://localhost:8000/api/users/auth")
             .json(&user_map)
             .send()
-            .await.unwrap()
+            .await
+            .unwrap()
             .json()
-            .await.unwrap();
+            .await
+            .unwrap();
         assert!(!res.status);
         assert!(res.msg.is_some());
         assert!(res.token.is_none());
@@ -78,26 +90,32 @@ mod tests {
         // Try with incorrect email
         let email = "not-email@email.com";
         user_map.insert("email", email);
-        let res: rolecall::web::UserResponse = client.post("http://localhost:8000/api/users/auth")
+        let res: rolecall::web::UserResponse = client
+            .post("http://localhost:8000/api/users/auth")
             .json(&user_map)
             .send()
-            .await.unwrap()
+            .await
+            .unwrap()
             .json()
-            .await.unwrap();
+            .await
+            .unwrap();
         assert!(!res.status);
         assert!(res.msg.is_some());
         assert!(res.token.is_none());
 
         // Try to create a game
         let mut game_map = HashMap::new();
-        game_map.insert("user_token", host_token);
+        game_map.insert("user_token", host_token.clone());
         game_map.insert("name", "Test Game".to_string());
-        let res: rolecall::web::GameResponse = client.post("http://localhost:8000/api/games")
+        let res: rolecall::web::GameResponse = client
+            .post("http://localhost:8000/api/games")
             .json(&game_map)
             .send()
-            .await.unwrap()
+            .await
+            .unwrap()
             .json()
-            .await.unwrap();
+            .await
+            .unwrap();
         assert!(res.status);
         assert!(res.msg.is_none());
         assert!(res.token.is_some());
@@ -106,27 +124,66 @@ mod tests {
         // Log in as player
         user_map.insert("email", "player");
         user_map.insert("password", "password");
-        let res: rolecall::web::UserResponse = client.post("http://localhost:8000/api/users/auth")
+        let res: rolecall::web::UserResponse = client
+            .post("http://localhost:8000/api/users/auth")
             .json(&user_map)
             .send()
-            .await.unwrap()
+            .await
+            .unwrap()
             .json()
-            .await.unwrap();
+            .await
+            .unwrap();
         info!("{:?}", res.msg);
         let player_token = res.token.unwrap();
 
         // Attempt to join game
         let mut req_map = HashMap::new();
-        req_map.insert("token", player_token);
+        req_map.insert("token", player_token.clone());
         req_map.insert("nick", "nickname".to_string());
         let addr = format!("http://localhost:8000/api/games/{}/join", game_token);
-        let res: rolecall::web::Response = client.post(&addr)
+        let res: rolecall::web::Response = client
+            .post(&addr)
             .json(&req_map)
             .send()
-            .await.unwrap()
+            .await
+            .unwrap()
             .json()
-            .await.unwrap();
+            .await
+            .unwrap();
         assert!(res.status);
         assert!(res.msg.is_none());
+
+        // Attempt to create map
+        let map_data = base64::encode(vec![0xde, 0xad, 0xbe, 0xef]);
+        let mut req_map = HashMap::new();
+        req_map.insert("token", host_token.clone());
+        req_map.insert("name", "foobar".to_string());
+        req_map.insert("data", map_data.clone());
+        let res: rolecall::web::Response = client
+            .post("http://localhost:8000/api/maps")
+            .json(&req_map)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(res.status);
+        assert!(res.msg.is_none());
+
+        let mut req_map = HashMap::new();
+        req_map.insert("token", host_token.clone());
+        let res: rolecall::web::MapResponse = client
+            .post("http://localhost:8000/api/maps/foobar")
+            .json(&req_map)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(res.status);
+        assert!(res.msg.is_none());
+        assert_eq!(res.data.unwrap(), map_data);
     }
 }

@@ -1,14 +1,14 @@
-use rocket::State;
-use rocket::response::Content;
+use futures::executor;
 use rocket::http::ContentType;
+use rocket::response::Content;
+use rocket::State;
 use rocket_contrib::json::Json;
 use rocket_contrib::serve::StaticFiles;
-use serde::{Serialize, Deserialize};
-use futures::executor;
+use serde::{Deserialize, Serialize};
 
 use std::sync::Arc;
 
-use crate::db::{DbManager, DbError, Game};
+use crate::db::{DbError, DbManager, Game};
 use std::error::Error;
 
 pub struct Api {
@@ -26,20 +26,33 @@ impl Api {
     }
 
     pub fn start(self) {
-        rocket::ignite().mount("/",
-                               routes![index,
-                                    game,
-                                    new_user,
-                                    check_user,
-                                    auth_user,
-                                    new_game,
-                                    join_game,
-                                    hosted_games,
-                                    joined_games])
+        rocket::ignite()
+            .mount(
+                "/",
+                routes![
+                    index,
+                    game,
+                    new_user,
+                    check_user,
+                    auth_user,
+                    new_game,
+                    join_game,
+                    hosted_games,
+                    joined_games,
+                    create_map,
+                    get_map,
+                ],
+            )
             .mount("/static", StaticFiles::from("./public/"))
             .mount("/dist", StaticFiles::from("../client/dist"))
-            .mount("/react", StaticFiles::from("../client/node_modules/react/umd/"))
-            .mount("/react-dom", StaticFiles::from("../client/node_modules/react-dom/umd/"))
+            .mount(
+                "/react",
+                StaticFiles::from("../client/node_modules/react/umd/"),
+            )
+            .mount(
+                "/react-dom",
+                StaticFiles::from("../client/node_modules/react-dom/umd/"),
+            )
             .manage(self)
             .launch();
     }
@@ -69,6 +82,13 @@ struct GameCreateRequest {
     name: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct MapCreateRequest {
+    token: String,
+    name: String,
+    data: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserResponse {
     pub status: bool,
@@ -92,27 +112,34 @@ pub struct ListGamesResponse {
     pub games: Option<Vec<Game>>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MapResponse {
+    pub status: bool,
+    pub msg: Option<String>,
+    pub data: Option<String>,
+}
+
 #[post("/api/users", format = "json", data = "<user>")]
 fn new_user(state: State<'_, Api>, user: Json<UserCreateRequest>) -> Json<UserResponse> {
-    let result = executor::block_on(state.db.create_user(&user.email, &user.password, &user.nickname));
+    let result = executor::block_on(state.db.create_user(
+        &user.email,
+        &user.password,
+        &user.nickname,
+    ));
 
     match result {
-        Ok(_) => {
-            Json(UserResponse {
-                status: true,
-                msg: None,
-                token: None,
-                username: None
-            })
-        },
-        Err(_) => {
-            Json(UserResponse {
-                status: true,
-                msg: Some("miscellaneous error".to_string()),
-                token: None,
-                username: None
-            })
-        }
+        Ok(_) => Json(UserResponse {
+            status: true,
+            msg: None,
+            token: None,
+            username: None,
+        }),
+        Err(_) => Json(UserResponse {
+            status: true,
+            msg: Some("miscellaneous error".to_string()),
+            token: None,
+            username: None,
+        }),
     }
 }
 
@@ -120,11 +147,11 @@ fn new_user(state: State<'_, Api>, user: Json<UserCreateRequest>) -> Json<UserRe
 fn check_user(state: State<'_, Api>, user: Json<Request>) -> Json<Response> {
     let result = executor::block_on(state.db.check_token(&user.token));
     match result {
-        Ok(true) => Json(Response{
+        Ok(true) => Json(Response {
             status: true,
-            msg: None
+            msg: None,
         }),
-        Ok(false) => Json(Response{
+        Ok(false) => Json(Response {
             status: false,
             msg: Some("token expired".to_string()),
         }),
@@ -144,13 +171,13 @@ fn auth_user(state: State<'_, Api>, user: Json<UserAuthRequest>) -> Json<UserRes
             status: true,
             msg: None,
             token: Some(token),
-            username: Some(username)
+            username: Some(username),
         }),
         Err(DbError::Auth) => Json(UserResponse {
             status: false,
             msg: Some("user not found".to_string()),
             token: None,
-            username: None
+            username: None,
         }),
         Err(e) => {
             warn!("API: error: {}", e);
@@ -158,7 +185,7 @@ fn auth_user(state: State<'_, Api>, user: Json<UserAuthRequest>) -> Json<UserRes
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
                 token: None,
-                username: None
+                username: None,
             })
         }
     }
@@ -169,89 +196,77 @@ fn new_game(state: State<'_, Api>, game: Json<GameCreateRequest>) -> Json<GameRe
     let result = executor::block_on(state.db.create_game(&game.user_token, &game.name));
 
     match result {
-        Ok(token) => {;
-            Json(GameResponse {
-                status: true,
-                msg: None,
-                token: Some(token),
-                username: None
-            })
-        },
-        Err(DbError::Auth) => {
-            Json(GameResponse {
-                status: false,
-                msg: Some("user not found".to_string()),
-                token: None,
-                username: None
-            })
-        }
+        Ok(token) => Json(GameResponse {
+            status: true,
+            msg: None,
+            token: Some(token),
+            username: None,
+        }),
+        Err(DbError::Auth) => Json(GameResponse {
+            status: false,
+            msg: Some("user not found".to_string()),
+            token: None,
+            username: None,
+        }),
         Err(e) => {
             warn!("ERROR: {}", e);
             Json(GameResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
                 token: None,
-                username: None
+                username: None,
             })
         }
     }
 }
 
 #[post("/api/games/hosted", format = "json", data = "<req>")]
-fn hosted_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResponse>{
+fn hosted_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResponse> {
     let result = executor::block_on(state.db.get_hosted_games(&req.token));
 
     match result {
-        Ok(games) => {
-            Json(ListGamesResponse {
-                status: true,
-                msg: None,
-                games: Some(games)
-            })
-        },
-        Err(DbError::Auth) => {
-            Json(ListGamesResponse {
-                status: false,
-                msg: Some("user not found".to_string()),
-                games: None
-            })
-        }
+        Ok(games) => Json(ListGamesResponse {
+            status: true,
+            msg: None,
+            games: Some(games),
+        }),
+        Err(DbError::Auth) => Json(ListGamesResponse {
+            status: false,
+            msg: Some("user not found".to_string()),
+            games: None,
+        }),
         Err(e) => {
             warn!("ERROR: {}", e);
             Json(ListGamesResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
-                games: None
+                games: None,
             })
         }
     }
 }
 
 #[post("/api/games/joined", format = "json", data = "<req>")]
-fn joined_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResponse>{
+fn joined_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResponse> {
     let result = executor::block_on(state.db.get_joined_games(&req.token));
 
     match result {
-        Ok(games) => {
-            Json(ListGamesResponse {
-                status: true,
-                msg: None,
-                games: Some(games)
-            })
-        },
-        Err(DbError::Auth) => {
-            Json(ListGamesResponse {
-                status: false,
-                msg: Some("user not found".to_string()),
-                games: None
-            })
-        }
+        Ok(games) => Json(ListGamesResponse {
+            status: true,
+            msg: None,
+            games: Some(games),
+        }),
+        Err(DbError::Auth) => Json(ListGamesResponse {
+            status: false,
+            msg: Some("user not found".to_string()),
+            games: None,
+        }),
         Err(e) => {
             warn!("ERROR: {}", e);
             Json(ListGamesResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
-                games: None
+                games: None,
             })
         }
     }
@@ -262,23 +277,75 @@ fn join_game(state: State<'_, Api>, game_token: String, req: Json<Request>) -> J
     let result = executor::block_on(state.db.join_game(&req.token, &game_token));
 
     match result {
-        Ok(_) => {
-            Json(Response {
-                status: true,
-                msg: None
-            })
-        },
-        Err(DbError::Auth) => {
-            Json(Response {
-                status: false,
-                msg: Some("user not found".to_string())
-            })
-        }
+        Ok(_) => Json(Response {
+            status: true,
+            msg: None,
+        }),
+        Err(DbError::Auth) => Json(Response {
+            status: false,
+            msg: Some("user not found".to_string()),
+        }),
         Err(e) => {
             warn!("ERROR: {}", e);
             Json(Response {
                 status: false,
-                msg: Some("miscellaneous error".to_string())
+                msg: Some("miscellaneous error".to_string()),
+            })
+        }
+    }
+}
+
+#[post("/api/maps", format = "json", data = "<req>")]
+fn create_map(state: State<'_, Api>, req: Json<MapCreateRequest>) -> Json<Response> {
+    if let Ok(data) = base64::decode(&req.data) {
+        let result = executor::block_on(state.db.create_map(&req.token, &req.name, &data));
+
+        match result {
+            Ok(_) => Json(Response {
+                status: true,
+                msg: None,
+            }),
+            Err(DbError::Auth) => Json(Response {
+                status: false,
+                msg: Some("user not found".to_string()),
+            }),
+            Err(e) => {
+                warn!("ERROR: {}", e);
+                Json(Response {
+                    status: false,
+                    msg: Some("miscellaneous error".to_string()),
+                })
+            }
+        }
+    } else {
+        Json(Response {
+            status: false,
+            msg: Some("failed to decode map data".to_string()),
+        })
+    }
+}
+
+#[post("/api/maps/<name>", format = "json", data = "<req>")]
+fn get_map(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<MapResponse> {
+    let result = executor::block_on(state.db.get_map(&req.token, &name));
+
+    match result {
+        Ok(data) => Json(MapResponse {
+            status: true,
+            msg: None,
+            data: Some(base64::encode(data)),
+        }),
+        Err(DbError::Auth) => Json(MapResponse {
+            status: false,
+            msg: Some("user not found".to_string()),
+            data: None,
+        }),
+        Err(e) => {
+            warn!("ERROR: {}", e);
+            Json(MapResponse {
+                status: false,
+                msg: Some("miscellaneous error".to_string()),
+                data: None,
             })
         }
     }

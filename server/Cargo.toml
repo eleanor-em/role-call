@@ -21,6 +21,7 @@ lazy_static = "1.4.0"
 flurry = "0.3.0"
 simple_logger = "1.6.0"
 log = "0.4.8"
+base64 = "0.12.3"
 
 [dev-dependencies]
 reqwest = { version = "0.10.6", features = ["json"] }

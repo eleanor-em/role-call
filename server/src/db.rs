@@ -1,12 +1,12 @@
-use futures::future;
-use tokio_postgres::{NoTls, Client};
-use std::sync::Arc;
+use crate::config::*;
 use argonautica::{Hasher, Verifier};
-use std::fmt::{Formatter, Display, Write};
-use std::time::SystemTime;
+use futures::future;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use crate::config::*;
+use std::fmt::{Display, Formatter, Write};
+use std::sync::Arc;
+use std::time::SystemTime;
+use tokio_postgres::{Client, NoTls};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Game {
@@ -99,14 +99,19 @@ impl DbManager {
     }
 
     fn timestamp() -> Result<Timestamp, DbError> {
-        Ok(SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis() as Timestamp)
+        Ok(SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_millis() as Timestamp)
     }
 
     fn create_user_token(&self) -> Result<(String, Timestamp), DbError> {
         let token = argonautica::utils::generate_random_base64_encoded_string(32)?;
         let timestamp = Self::timestamp()?;
         // Add 1 day to the timeout
-        Ok((token, timestamp + CONFIG.user_token_timeout.as_millis() as Timestamp))
+        Ok((
+            token,
+            timestamp + CONFIG.user_token_timeout.as_millis() as Timestamp,
+        ))
     }
 
     fn create_user_tag() -> String {
@@ -126,16 +131,22 @@ impl DbManager {
     }
 
     pub async fn clear_tables(&self) -> Result<(), DbError> {
-        self.client.execute("
+        self.client
+            .execute(
+                "
             DROP TABLE IF EXISTS
-            user_accounts, identities, unconfirmed_identities, games, user_games, assets
-            CASCADE;", &[]).await?;
+            user_accounts, identities, unconfirmed_identities, games, user_games, maps
+            CASCADE;",
+                &[],
+            )
+            .await?;
         Ok(())
     }
 
     pub async fn create_tables(&self) -> Result<(), DbError> {
         future::try_join3(
-            self.client.execute("
+            self.client.execute(
+                "
                 CREATE TABLE IF NOT EXISTS user_accounts(
                     id          serial PRIMARY KEY,
                     email       text UNIQUE NOT NULL,
@@ -144,57 +155,82 @@ impl DbManager {
                     tag         text NOT NULL,
                     CONSTRAINT unique_user_name UNIQUE(nickname, tag),
                     timeout     bigint NOT NULL
-                );", &[]),
-            self.client.execute("
+                );",
+                &[],
+            ),
+            self.client.execute(
+                "
                 CREATE TABLE IF NOT EXISTS identities(
                     id      serial PRIMARY KEY,
                     email   text UNIQUE NOT NULL,
                     pw_hash text NOT NULL,
                     user_id integer NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES user_accounts(id) ON DELETE CASCADE
-                );", &[]),
-            self.client.execute("
+                );",
+                &[],
+            ),
+            self.client.execute(
+                "
                 CREATE TABLE IF NOT EXISTS unconfirmed_identities(
                     id          serial PRIMARY KEY,
                     email       text UNIQUE NOT NULL,
                     pw_hash     text NOT NULL,
                     nickname    text NOT NULL,
                     token       text NOT NULL
-                );", &[])
-        ).await?;
+                );",
+                &[],
+            ),
+        )
+        .await?;
 
         future::try_join3(
-            self.client.execute("
+            self.client.execute(
+                "
                 CREATE TABLE IF NOT EXISTS games(
                     id      serial PRIMARY KEY,
                     host    integer NOT NULL,
                     token   text UNIQUE NOT NULL,
                     name    text NOT NULL,
                     FOREIGN KEY (host) REFERENCES user_accounts(id) ON DELETE CASCADE
-                );", &[]),
-            self.client.execute("
+                );",
+                &[],
+            ),
+            self.client.execute(
+                "
                 CREATE TABLE IF NOT EXISTS user_games(
                     user_id integer NOT NULL,
                     game_id integer NOT NULL,
                     PRIMARY KEY (user_id, game_id),
                     FOREIGN KEY (user_id) REFERENCES user_accounts(id)   ON DELETE CASCADE,
                     FOREIGN KEY (game_id) REFERENCES games(id)           ON DELETE CASCADE
-                );", &[]),
-            self.client.execute("
-                CREATE TABLE IF NOT EXISTS assets(
+                );",
+                &[],
+            ),
+            self.client.execute(
+                "
+                CREATE TABLE IF NOT EXISTS maps(
                     id      serial PRIMARY KEY,
                     owner   integer NOT NULL,
                     name    text NOT NULL,
                     data    bytea NOT NULL,
                     FOREIGN KEY (owner) REFERENCES user_accounts(id) ON DELETE CASCADE
-                );", &[]),
-        ).await?;
+                );",
+                &[],
+            ),
+        )
+        .await?;
 
         // for debug, create test users
         if CONFIG.mode == RunMode::Debug {
-            let token = self.create_user("admin", "password", "admin").await.unwrap();
+            let token = self
+                .create_user("admin", "password", "admin")
+                .await
+                .unwrap();
             let admin_token = self.confirm_user("admin", &token).await.unwrap();
-            let token = self.create_user("player", "password", "player").await.unwrap();
+            let token = self
+                .create_user("player", "password", "player")
+                .await
+                .unwrap();
             let player_token = self.confirm_user("player", &token).await.unwrap();
             let game_token = self.create_game(&admin_token, &"Test Game").await.unwrap();
             self.join_game(&player_token, &game_token).await.unwrap();
@@ -205,7 +241,12 @@ impl DbManager {
         Ok(())
     }
 
-    pub async fn create_user(&self, email: &str, password: &str, nickname: &str) -> Result<String, DbError> {
+    pub async fn create_user(
+        &self,
+        email: &str,
+        password: &str,
+        nickname: &str,
+    ) -> Result<String, DbError> {
         let (token, _) = self.create_user_token()?;
         let mut hasher = Hasher::default();
         let pw_hash = hasher
@@ -217,13 +258,19 @@ impl DbManager {
         let statement = "
             INSERT INTO unconfirmed_identities(email, pw_hash, token, nickname)
             VALUES($1, $2, $3, $4);";
-        self.client.execute(statement, &[&email, &pw_hash, &token, &nickname]).await?;
+        self.client
+            .execute(statement, &[&email, &pw_hash, &token, &nickname])
+            .await?;
         info!("created new unverified user: {}", email);
 
         Ok(token)
     }
 
-    async fn remove_unconfirmed(&self, email: &str, token: &str) -> Result<(String, String), DbError> {
+    async fn remove_unconfirmed(
+        &self,
+        email: &str,
+        token: &str,
+    ) -> Result<(String, String), DbError> {
         let statement = "
             DELETE FROM unconfirmed_identities
             WHERE email=$1 AND token=$2
@@ -246,7 +293,9 @@ impl DbManager {
             INSERT INTO user_accounts(email, token, timeout, nickname, tag)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING (id);";
-        let row = self.client.query_one(statement, &[&email, &token, &timeout, &nickname, &tag])
+        let row = self
+            .client
+            .query_one(statement, &[&email, &token, &timeout, &nickname, &tag])
             .await?;
         let user_id: i32 = row.get(0);
         info!("generated new token for user #{}", user_id);
@@ -254,7 +303,9 @@ impl DbManager {
         let statement = "
             INSERT INTO identities(email, pw_hash, user_id)
             VALUES($1, $2, $3);";
-        self.client.execute(statement, &[&email, &pw_hash, &user_id]).await?;
+        self.client
+            .execute(statement, &[&email, &pw_hash, &user_id])
+            .await?;
         info!("verified user id #{}: {}", user_id, email);
         Ok(token)
     }
@@ -275,13 +326,19 @@ impl DbManager {
         }
     }
 
-    pub async fn auth_user(&self, email: &str, password: &str) -> Result<(String, String), DbError> {
+    pub async fn auth_user(
+        &self,
+        email: &str,
+        password: &str,
+    ) -> Result<(String, String), DbError> {
         let (user_id, pw_hash) = self.get_identities(email).await?;
         let mut verifier = Verifier::default();
-        if verifier.with_hash(pw_hash)
-                .with_password(password)
-                .with_secret_key(&CONFIG.pepper)
-                .verify()? {
+        if verifier
+            .with_hash(pw_hash)
+            .with_password(password)
+            .with_secret_key(&CONFIG.pepper)
+            .verify()?
+        {
             let (token, timeout) = self.create_user_token()?;
             info!("generated new token for user #{}", user_id);
 
@@ -290,7 +347,10 @@ impl DbManager {
                 SET token=$2, timeout=$3
                 WHERE id=$1
                 RETURNING nickname, tag;";
-            let rows = self.client.query(statement, &[&user_id, &token, &timeout]).await?;
+            let rows = self
+                .client
+                .query(statement, &[&user_id, &token, &timeout])
+                .await?;
             let row = rows.get(0).ok_or(DbError::Auth)?;
             let nickname: String = row.get(0);
             let tag: String = row.get(1);
@@ -332,15 +392,23 @@ impl DbManager {
             INSERT INTO games (host, token, name)
             VALUES ($1, $2, $3)
             RETURNING id;";
-        let row = self.client.query_one(statement, &[&user_id, &game_token, &name]).await?;
+        let row = self
+            .client
+            .query_one(statement, &[&user_id, &game_token, &name])
+            .await?;
         let game_id: i32 = row.get(0);
 
         let statement = "
             INSERT INTO user_games (user_id, game_id)
             VALUES ($1, $2);";
-        self.client.execute(statement, &[&user_id, &game_id]).await?;
+        self.client
+            .execute(statement, &[&user_id, &game_id])
+            .await?;
 
-        info!("created game {} ({}) for user #{} ({})", game_token, name, user_id, username);
+        info!(
+            "created game {} ({}) for user #{} ({})",
+            game_token, name, user_id, username
+        );
         Ok(game_token)
     }
 
@@ -364,8 +432,13 @@ impl DbManager {
         let statement = "
             INSERT INTO user_games(user_id, game_id)
             VALUES ($1, $2)";
-        self.client.execute(statement, &[&user_id, &game_id]).await?;
-        info!("user #{} ({}) joined game {}", user_id, username, game_token);
+        self.client
+            .execute(statement, &[&user_id, &game_id])
+            .await?;
+        info!(
+            "user #{} ({}) joined game {}",
+            user_id, username, game_token
+        );
         Ok(())
     }
 
@@ -376,11 +449,13 @@ impl DbManager {
             FROM games
             WHERE host=$1;";
         let rows = self.client.query(statement, &[&user_id]).await?;
-        Ok(rows.into_iter()
+        Ok(rows
+            .into_iter()
             .map(|row| Game {
                 token: row.get(0),
                 name: row.get(1),
-            }).collect())
+            })
+            .collect())
     }
 
     pub async fn get_joined_games(&self, user_token: &str) -> Result<Vec<Game>, DbError> {
@@ -392,24 +467,52 @@ impl DbManager {
                 ON user_games.user_id=$1
                     AND games.id=user_games.game_id;";
         let rows = self.client.query(statement, &[&user_id]).await?;
-        Ok(rows.into_iter()
+        Ok(rows
+            .into_iter()
             .map(|row| Game {
                 token: row.get(0),
                 name: row.get(1),
-            }).collect())
+            })
+            .collect())
     }
 
-    pub async fn create_asset(&self, user_token: &str, name: &str, data: &[u8]) -> Result<(), DbError> {
+    pub async fn create_map(
+        &self,
+        user_token: &str,
+        name: &str,
+        data: &[u8],
+    ) -> Result<(), DbError> {
         let (user_id, username) = self.get_account(user_token).await?;
         let statement = "
-            INSERT INTO assets (owner, name, data)
+            INSERT INTO maps (owner, name, data)
             VALUES ($1, $2, $3);";
-        self.client.execute(statement, &[&user_id, &name, &data]).await?;
-        info!("added asset \"{}\" to user #{} ({})", name, user_id, username);
+        self.client
+            .execute(statement, &[&user_id, &name, &data])
+            .await?;
+        info!("added map \"{}\" to user #{} ({})", name, user_id, username);
         Ok(())
     }
 
-    pub async fn check_game_permissions(&self, user_token: &str, game_token: &str) -> Result<GamePermission, DbError> {
+    pub async fn get_map(&self, user_token: &str, name: &str) -> Result<Vec<u8>, DbError> {
+        let (user_id, _) = self.get_account(user_token).await?;
+        let statement = "
+            SELECT data
+            FROM maps
+            WHERE owner=$1 AND name=$2;";
+        let rows = self.client.query(statement, &[&user_id, &name]).await?;
+        if rows.len() > 0 {
+            let data: Vec<u8> = rows.get(0).ok_or(DbError::Auth)?.get(0);
+            Ok(data)
+        } else {
+            Err(DbError::Auth)
+        }
+    }
+
+    pub async fn check_game_permissions(
+        &self,
+        user_token: &str,
+        game_token: &str,
+    ) -> Result<GamePermission, DbError> {
         let statement = "
             SELECT id, host
             FROM games
@@ -426,7 +529,10 @@ impl DbManager {
                 AND user_games.user_id=user_accounts.id
                 AND user_games.game_id=$1
             GROUP BY user_id;";
-        let row = self.client.query_one(statement, &[&game_id, &user_token]).await?;
+        let row = self
+            .client
+            .query_one(statement, &[&game_id, &user_token])
+            .await?;
         let count: i64 = row.get(0);
         let user: i32 = row.get(1);
 
@@ -514,7 +620,14 @@ mod tests {
         assert_eq!(joined.len(), 1);
         assert!(joined.contains(&game));
 
-        // Create an asset
-        db.create_asset(&host_token, "foobar", &vec![0xde, 0xad, 0xbe, 0xef]).await.unwrap();
+        let map_data = vec![0xde, 0xad, 0xbe, 0xef];
+
+        // Create a map
+        db.create_map(&host_token, "foobar", &map_data)
+            .await
+            .unwrap();
+
+        let map = db.get_map(&host_token, "foobar").await.unwrap();
+        assert_eq!(map, map_data);
     }
 }
