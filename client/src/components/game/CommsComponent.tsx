@@ -53,9 +53,11 @@ export class Comms {
     failedListeners: Record<string, (msg: FailedConnectionMessage) => void> = {};
     shouldShowRefresh = true;
     isHost = false;
+    username: String = null;
 
     constructor(socket: W3cWebSocket, props: CommsProps) {
         this.socket = socket;
+        this.username = props.user.username;
 
         socket.onopen = () => {
             props.onConnect(this);

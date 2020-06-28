@@ -22,7 +22,7 @@ export function GameApp(props: GameProps): React.ReactElement {
     const [message, setMessage] = useState('');
     const [appState, setAppState] = useState(AppState.Loading);
     const [user, setUser] = useState(null as User);
-    const [cookies, setCookie, removeCookie] = useCookies([]);
+    const [cookies, setCookie] = useCookies([]);
     
     async function login(email: string, password: string): Promise<void> {
         setMessage('');

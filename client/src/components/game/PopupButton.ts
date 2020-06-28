@@ -62,16 +62,8 @@ export class PopupButton {
         const top = this.y - this.radius;
         const bottom = this.y + this.radius;
 
-        if (relMouseCoord.x > left && relMouseCoord.x <  right
-            && relMouseCoord.y > top && relMouseCoord.y < bottom) {
-            this.hovered = true;
-            this.setForcePointer(true);
-        } else {
-            if (this.hovered) {
-                this.hovered = false;
-                this.setForcePointer(false);
-            }
-        }
+        this.hovered = relMouseCoord.x > left && relMouseCoord.x <  right
+            && relMouseCoord.y > top && relMouseCoord.y < bottom;
     }
 
     onTokenMove(delta: Point): void {
@@ -100,5 +92,9 @@ export class PopupButton {
         ctx.font = `${2 * this.radius}px FontAwesome`;
         this.textWidth = ctx.measureText(this.content).width;
         ctx.fillText(this.content, this.x - this.textWidth / 2, this.y + this.textWidth / 2);
+
+        if (this.hovered) {
+            this.setForcePointer(true);
+        }
     }
 }

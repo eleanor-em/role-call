@@ -134,7 +134,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         renderer = new Renderer();
     }
     if (tokenManager == null && props.comms != null) {
-        tokenManager = new TokenManager(props.comms, renderer, setForcePointer);
+        tokenManager = new TokenManager(props.comms, renderer, forceRender, setForcePointer);
     }
     useEffect(() => {
         renderer.width = window.innerWidth * 4 / 5;
@@ -149,8 +149,6 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     function forceRender() {
         setForceRender(!forceRenderFlag);
     }
-    // Render at 20 fps
-    window.setInterval(() => forceRender(), 20);
 
     // Set shadow token data
     if (!hideToken && typeToPlace != props.tokenType) {
@@ -188,6 +186,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         const { x, y } = renderer.snapToGrid(coord);
         if (x != mouseGridCoord.x || y != mouseGridCoord.y) {
             setMouseGridCoord({ x, y });
+            forceRender();
         }
     }
 
@@ -230,6 +229,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         } else {
             tokenManager?.onClick();
         }
+        forceRender();
     }
 
     function onPlaceToken(mouse: Point): void {
@@ -317,6 +317,13 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 break;
             case 'Delete':
                 tokenManager?.onDelete();
+                forceRender();
+                break;
+            case 'Escape':
+                prevTypeToPlace = TokenType.None;
+                typeToPlace = TokenType.None;
+                tokenManager?.onEscKey();
+                forceRender();
                 break;
             case 'ArrowLeft':
                 tokenManager?.onArrowKey(ArrowKey.Left);

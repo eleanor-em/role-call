@@ -144,6 +144,7 @@ export class TokenManager {
     optionButton: PopupButton = null;
     options: Options = null;
 
+    forceRender: () => void;
     setForcePointer: (force: boolean) => void;
     players: StoredPlayer[] = [];
 
@@ -151,15 +152,16 @@ export class TokenManager {
     // this exists to make movement feel more responsive to the user
     tentativeMovements: Record<string, Record<string, TentativeMovement>> = {};
 
-    constructor(comms: Comms, renderer: Renderer, setForcePointer: (force: boolean) => void) {
+    constructor(comms: Comms, renderer: Renderer, forceRender: () => void, setForcePointer: (force: boolean) => void) {
         this.comms = comms;
         this.renderer = renderer;
+        this.forceRender = forceRender;
         this.setForcePointer = setForcePointer;
 
         comms.addPlaceTokenListener('TokenLayerAdd', msg => {
             if (msg.kind != TokenType.None) {
                 this.tokens[msg.id] = msg;
-                // forceRender();
+                this.forceRender();
             }
         });
 
@@ -171,6 +173,7 @@ export class TokenManager {
             }
 
             delete this.tokens[token_id];
+            this.forceRender();
         });
 
         comms.addMoveTokenListener('TokenLayerMove', ({ id, token_id, dx, dy }) => {
@@ -184,9 +187,16 @@ export class TokenManager {
 
             this.tokens[token_id].x += dx;
             this.tokens[token_id].y += dy;
+            this.forceRender();
+        });
+
+        comms.addSetControllerListener('TokenLayerSetCtrl', ({ token_id, new_controller }) => {
+            this.tokens[token_id].controller = new_controller;
+            this.forceRender();
         });
 
         renderer.addRenderListener('TokenManagerRender', (ctx, _) => {
+            setForcePointer(false);
             this.hoveredToken = null;
             this.deleteButton?.render(ctx);
             this.optionButton?.render(ctx);
@@ -217,6 +227,21 @@ export class TokenManager {
                 if (this.selectedToken?.id == token_id) {
                     highlight = HighlightType.Select;
                     this.options?.updatePosition(tx, ty, this.renderer.cellSize);
+                }
+
+                // check for controllable shadow
+                if (token.controller == this.comms.username) {
+                    // calculate centre
+                    const cx = tx + this.renderer.cellSize / 2;
+                    const cy = ty + this.renderer.cellSize / 2;
+                    const r0 = Math.round(this.renderer.cellSize * 0.3);
+                    const r1 = Math.round(this.renderer.cellSize * 0.6);
+
+                    let grd = ctx.createRadialGradient(cx, cy, r0, cx, cy, r1);
+                    grd.addColorStop(0, 'white');
+                    grd.addColorStop(1, '#00000000');
+                    ctx.fillStyle = grd;
+                    ctx.fillRect(tx - this.renderer.cellSize, ty - this.renderer.cellSize, tx + this.renderer.cellSize, ty + this.renderer.cellSize);
                 }
 
                 drawToken(ctx, token.kind, tx, ty, this.renderer.cellSize, token.colour, highlight);
@@ -294,8 +319,15 @@ export class TokenManager {
         }
     }
 
+    onEscKey(): void {
+        this.selectedToken = null;
+        this.optionButton = null;
+        this.deleteButton = null;
+        this.options = null;
+    }
+
     onArrowKey(key: ArrowKey): void {
-        if (this.selectedToken) {
+        if (this.selectedToken && (this.comms.isHost || this.selectedToken.controller == this.comms.username)) {
             // construct the message
             const delta = this.arrowKeyToDelta(key);
             const id = uuidv4();
@@ -419,11 +451,8 @@ class Options {
             ctx.fillText(name, x + this.padding, y + h - this.padding / 2);
         }
 
-        // TODO: this overwrites the buttons' settings
         if (this.hoveredName) {
             this.setForcePointer(true);
-        } else {
-            this.setForcePointer(false);
         }
     }
 

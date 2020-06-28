@@ -23,6 +23,7 @@ impl GameState {
         match msg {
             ProtocolMessage::PlaceToken(token) => {
                 token.id = Some(format!("{}", self.token_count));
+                self.token_count += 1;
                 // controller is automatically the host
                 token.controller = Some(self.host.username.clone());
 
