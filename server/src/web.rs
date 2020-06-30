@@ -336,7 +336,7 @@ fn create_map(state: State<'_, Api>, content_type: &ContentType, data: Data) -> 
     let name = multipart_form_data.texts.remove("name");
 
     // Validate the inputs.
-    // TODO: check that the data does actually form an image
+    // TODO: check that the data does actually form an image, isn't too large, etc.
     if data.is_none() {
         warn!("ERROR: malformed file data");
         return Json(Response {

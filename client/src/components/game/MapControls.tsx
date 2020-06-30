@@ -43,7 +43,6 @@ export function MapControls(props: MapControlsProps): React.ReactElement {
                             name: map.name,
                             uri,
                         });
-                        console.log(uri);
                     } else {
                         console.error(`failed to download map ${map.name}`);
                     }
