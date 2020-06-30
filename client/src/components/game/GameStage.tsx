@@ -68,8 +68,8 @@ export class Renderer {
         // Draw content
         this.renderGrid(ctx);
         Object.keys(this.renderListeners)
-            // descending order by dept
-            .sort((a, b) => this.renderListenerDepths[a] - this.renderListenerDepths[b])
+            // descending order by depth
+            .sort((a, b) => this.renderListenerDepths[b] - this.renderListenerDepths[a])
             .map(key => this.renderListeners[key])
             .forEach(op => op(ctx, this.cellSize));
     }
@@ -164,7 +164,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             drawToken(ctx, typeToPlace, x, y, cellSize, props.tokenColour, HighlightType.Select);
         }
     }
-    renderer?.addRenderListener('SelectedPreview', renderPreview, 1);
+    renderer?.addRenderListener('SelectedPreview', renderPreview, -1);
 
     function handleMouseMove(ev: any): void {
         handleMouseEnter(ev);

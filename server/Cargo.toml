@@ -22,7 +22,8 @@ flurry = "0.3.0"
 simple_logger = "1.6.0"
 log = "0.4.8"
 base64 = "0.12.3"
-
+rocket-multipart-form-data = "0.9.4"
+uuid = { version = "0.8", features = ["serde", "v4"] }
 [dev-dependencies]
 reqwest = { version = "0.10.6", features = ["json"] }
 serial_test = "0.4.0"

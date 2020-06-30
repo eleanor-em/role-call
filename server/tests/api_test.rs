@@ -154,14 +154,14 @@ mod tests {
         assert!(res.msg.is_none());
 
         // Attempt to create map
-        let map_data = base64::encode(vec![0xde, 0xad, 0xbe, 0xef]);
-        let mut req_map = HashMap::new();
-        req_map.insert("token", host_token.clone());
-        req_map.insert("name", "foobar".to_string());
-        req_map.insert("data", map_data.clone());
+        let map_data = vec![0xde, 0xad, 0xbe, 0xef];
+        let form = reqwest::multipart::Form::new()
+            .text("token", host_token.clone())
+            .text("name", "foobar".to_string())
+            .part("data", reqwest::multipart::Part::bytes(map_data.clone()));
         let res: rolecall::web::Response = client
-            .post("http://localhost:8000/api/maps")
-            .json(&req_map)
+            .post("http://localhost:8000/api/maps/new")
+            .multipart(form)
             .send()
             .await
             .unwrap()
@@ -174,7 +174,7 @@ mod tests {
         let mut req_map = HashMap::new();
         req_map.insert("token", host_token.clone());
         let res: rolecall::web::MapResponse = client
-            .post("http://localhost:8000/api/maps/foobar")
+            .post("http://localhost:8000/api/maps/one/foobar")
             .json(&req_map)
             .send()
             .await
@@ -184,6 +184,6 @@ mod tests {
             .unwrap();
         assert!(res.status);
         assert!(res.msg.is_none());
-        assert_eq!(res.data.unwrap(), map_data);
+        assert_eq!(res.data.unwrap(), base64::encode(&map_data));
     }
 }

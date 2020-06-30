@@ -102,7 +102,7 @@ export const GameLanding = function(props: GameLandingProps): React.ReactElement
                     {playerList}
                 </div>
                 <div className="GameControls">
-                    {isHost && <Controls setTokenColour={setTokenColour} setTokenType={setTokenType}/>}
+                    {isHost && <Controls setTokenColour={setTokenColour} setTokenType={setTokenType} comms={comms} />}
                 </div>
             </div>
         </div>

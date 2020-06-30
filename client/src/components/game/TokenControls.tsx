@@ -98,7 +98,7 @@ export function TokenControls(props: TokenControlsProps): React.ReactElement {
                     onMouseEnter={handleMouseMove}
                     onMouseLeave={resetMouse}
                     onBlur={resetMouse}
-                    style={{ cursor }}/>
+                    style={{ cursor }} />
         </div>
     );
 }

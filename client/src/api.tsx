@@ -1,5 +1,6 @@
 import { Game } from './models/Game';
 import { User } from './models/User';
+import {GameMap} from "./models/GameMap";
 
 const BASE_URL = process.env.RC_API_URL;
 
@@ -25,6 +26,18 @@ export interface ListGamesResponse {
 export interface CheckResponse {
     status: boolean,
     msg?: string,
+}
+
+export interface ListMapsResponse {
+    status: boolean,
+    msg?: string,
+    maps?: [GameMap],
+}
+
+export interface MapResponse {
+    status: boolean,
+    msg?: string,
+    data?: string,
 }
 
 async function check(token: string): Promise<CheckResponse> {
@@ -85,10 +98,49 @@ async function joinedGames(user: User): Promise<ListGamesResponse> {
     return await response.json();   
 }
 
+async function createMap(user: User, name: string, file: File): Promise<CheckResponse> {
+    const buffer = await file.arrayBuffer();
+
+    const data = new FormData();
+    data.append('token', user.token);
+    data.append('name', name);
+    data.append('data', file);
+    const response = await fetch(`${BASE_URL}/api/maps/new`, {
+        method: 'POST',
+        body: data
+    });
+    return await response.json();
+}
+
+async function getAllMaps(user: User): Promise<ListMapsResponse> {
+    const response = await fetch(`${BASE_URL}/api/maps/all`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json;charset=utf-8'
+        },
+        body: JSON.stringify(user)
+    });
+    return await response.json();
+}
+
+async function getMap(user: User, name: string): Promise<MapResponse> {
+    const response = await fetch(`${BASE_URL}/api/maps/one/${name}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json;charset=utf-8'
+        },
+        body: JSON.stringify(user)
+    });
+    return await response.json();
+}
+
 export const api = {
     check,
     auth,
     createGame,
     hostedGames,
     joinedGames,
+    createMap,
+    getAllMaps,
+    getMap,
 };

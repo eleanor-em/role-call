@@ -2,10 +2,13 @@ import * as React from 'react';
 import { useState } from 'react';
 import { TokenControls } from './TokenControls';
 import {TokenType} from "./TokenManager";
+import {Comms} from "./CommsComponent";
+import {MapControls} from "./MapControls";
 
 export interface ControlsProps {
     setTokenColour(col: string): void,
     setTokenType(type: TokenType): void,
+    comms: Comms,
 }
 
 export function Controls(props: ControlsProps): React.ReactElement {
@@ -15,7 +18,7 @@ export function Controls(props: ControlsProps): React.ReactElement {
     function getContents(): React.ReactElement {
         switch (headings[tab]) {
             case 'Maps':
-                break;
+                return (<MapControls comms={props.comms} />);
             case 'Tokens':
                 return (<TokenControls setTokenColour={props.setTokenColour} setTokenType={props.setTokenType} />);
             case 'Props':

@@ -14,6 +14,12 @@ pub struct Game {
     name: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Map {
+    id: i32,
+    name: String,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum GamePermission {
     Host,
@@ -29,6 +35,7 @@ pub enum DbError {
     Config(std::env::VarError),
     ConfigParse,
     Auth,
+    AlreadyExists,
 }
 
 impl From<tokio_postgres::Error> for DbError {
@@ -212,7 +219,8 @@ impl DbManager {
                     id      serial PRIMARY KEY,
                     owner   integer NOT NULL,
                     name    text NOT NULL,
-                    data    bytea NOT NULL,
+                    UNIQUE (owner, name),
+                    path    text NOT NULL,
                     FOREIGN KEY (owner) REFERENCES user_accounts(id) ON DELETE CASCADE
                 );",
                 &[],
@@ -480,28 +488,56 @@ impl DbManager {
         &self,
         user_token: &str,
         name: &str,
-        data: &[u8],
+        path: &str,
     ) -> Result<(), DbError> {
         let (user_id, username) = self.get_account(user_token).await?;
         let statement = "
-            INSERT INTO maps (owner, name, data)
+            INSERT INTO maps (owner, name, path)
             VALUES ($1, $2, $3);";
-        self.client
-            .execute(statement, &[&user_id, &name, &data])
-            .await?;
-        info!("added map \"{}\" to user #{} ({})", name, user_id, username);
-        Ok(())
+
+        // TODO: Convert data to png
+
+        match self
+            .client
+            .execute(statement, &[&user_id, &name, &path])
+            .await
+        {
+            Ok(_) => {
+                info!("added map \"{}\" to user #{} ({})", name, user_id, username);
+                Ok(())
+            }
+            Err(_) => {
+                // Assume name already exists
+                Err(DbError::AlreadyExists)
+            }
+        }
     }
 
-    pub async fn get_map(&self, user_token: &str, name: &str) -> Result<Vec<u8>, DbError> {
+    pub async fn get_all_maps(&self, user_token: &str) -> Result<Vec<Map>, DbError> {
         let (user_id, _) = self.get_account(user_token).await?;
         let statement = "
-            SELECT data
+            SELECT id, name
+            FROM maps
+            WHERE owner=$1;";
+        let rows = self.client.query(statement, &[&user_id]).await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| Map {
+                id: row.get(0),
+                name: row.get(1),
+            })
+            .collect())
+    }
+
+    pub async fn get_map(&self, user_token: &str, name: &str) -> Result<String, DbError> {
+        let (user_id, _) = self.get_account(user_token).await?;
+        let statement = "
+            SELECT path
             FROM maps
             WHERE owner=$1 AND name=$2;";
         let rows = self.client.query(statement, &[&user_id, &name]).await?;
         if rows.len() > 0 {
-            let data: Vec<u8> = rows.get(0).ok_or(DbError::Auth)?.get(0);
+            let data = rows.get(0).ok_or(DbError::Auth)?.get(0);
             Ok(data)
         } else {
             Err(DbError::Auth)
@@ -620,14 +656,14 @@ mod tests {
         assert_eq!(joined.len(), 1);
         assert!(joined.contains(&game));
 
-        let map_data = vec![0xde, 0xad, 0xbe, 0xef];
-
-        // Create a map
-        db.create_map(&host_token, "foobar", &map_data)
-            .await
-            .unwrap();
-
-        let map = db.get_map(&host_token, "foobar").await.unwrap();
-        assert_eq!(map, map_data);
+        // let map_data = vec![0xde, 0xad, 0xbe, 0xef];
+        //
+        // // Create a map
+        // db.create_map(&host_token, "foobar", &map_data)
+        //     .await
+        //     .unwrap();
+        //
+        // let map = db.get_map(&host_token, "foobar").await.unwrap();
+        // assert_eq!(map, map_data);
     }
 }

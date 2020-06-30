@@ -12,6 +12,7 @@
   "devDependencies": {
     "@types/react": "^16.9.35",
     "@types/react-dom": "^16.9.8",
+    "@types/react-modal": "^3.10.6",
     "@types/websocket": "^1.0.0",
     "@typescript-eslint/eslint-plugin": "^3.1.0",
     "@typescript-eslint/parser": "^3.1.0",
@@ -38,6 +39,7 @@
     "react": "^16.13.1",
     "react-cookie": "^4.0.3",
     "react-dom": "^16.13.1",
+    "react-modal": "^3.11.2",
     "websocket": "^1.0.31"
   }
 }

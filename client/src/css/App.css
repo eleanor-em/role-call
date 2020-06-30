@@ -12,7 +12,6 @@ body {
     display: flex;
     flex: 10;
     flex-direction: column;
-    align-items: row;
     justify-content: center;
     border-bottom: solid 0.3em #090b10;
 }
@@ -26,7 +25,6 @@ body {
 
 div.GameSidebar {
     flex: 1;
-    flex-direction: row;
     padding-left: 0.5em;
     padding-right: 0.5em;
     margin-left: 3px;
@@ -39,10 +37,7 @@ div.GameSidebar {
 div.GameGreeting {
     flex: 1;
     border: 1px #e2cca4 solid;
-    padding-top: 1em;
-    padding-bottom: 1em;
-    padding-left: 0.5em;
-    padding-right: 0.5em;
+    padding: 1em 0.5em;
     margin-bottom: 0.5em;
 }
 
@@ -147,8 +142,7 @@ span.SelectedTab {
     text-align: center;
     display: inline-flex;
     flex-direction: row;
-    padding: 0.3em;
-    padding-bottom: 1em;
+    padding: 0.3em 0.3em 1em;
     border-left: 1px #e2cca4 solid;
     border-top: 1px #e2cca4 solid;
     border-right: 1px #e2cca4 solid;
@@ -159,8 +153,7 @@ span.UnselectedTab {
     text-align: center;
     display: inline-flex;
     flex-direction: row;
-    padding: 0.3em;
-    padding-bottom: 1em;
+    padding: 0.3em 0.3em 1em;
     cursor: pointer;
     border: 1px #a38855 solid;
     border-bottom-color: #e2cca4;
@@ -184,4 +177,24 @@ div.InfoDisplay {
 
 a {
     outline: none !important;
+}
+
+button {
+    color: #e2cca4;
+    background-color: #20243e;
+    border: none;
+    margin: 0.2em;
+    padding: 0.7em;
+    border-radius: 10px;
+    min-width: 100px;
+}
+
+button:hover {
+    background-color: #373b61;
+    cursor: pointer;
+}
+
+button:disabled {
+    background-color: #20243e;
+    cursor: default;
 }

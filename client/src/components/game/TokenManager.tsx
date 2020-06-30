@@ -230,7 +230,7 @@ export class TokenManager {
                 }
 
                 // check for controllable shadow
-                if (token.controller == this.comms.username) {
+                if (token.controller == this.comms.user.username) {
                     // calculate centre
                     const cx = tx + this.renderer.cellSize / 2;
                     const cy = ty + this.renderer.cellSize / 2;
@@ -327,7 +327,7 @@ export class TokenManager {
     }
 
     onArrowKey(key: ArrowKey): void {
-        if (this.selectedToken && (this.comms.isHost || this.selectedToken.controller == this.comms.username)) {
+        if (this.selectedToken && (this.comms.isHost || this.selectedToken.controller == this.comms.user.username)) {
             // construct the message
             const delta = this.arrowKeyToDelta(key);
             const id = uuidv4();

@@ -1,15 +1,25 @@
 use futures::executor;
 use rocket::http::ContentType;
 use rocket::response::Content;
-use rocket::State;
+use rocket::{Data, State};
 use rocket_contrib::json::Json;
 use rocket_contrib::serve::StaticFiles;
+use rocket_multipart_form_data::{
+    MultipartFormData, MultipartFormDataField, MultipartFormDataOptions,
+};
 use serde::{Deserialize, Serialize};
 
+use std::error::Error;
 use std::sync::Arc;
 
-use crate::db::{DbError, DbManager, Game};
-use std::error::Error;
+use crate::config::CONFIG;
+use crate::db::{DbError, DbManager, Game, Map};
+
+// use futures::task::Context;
+use std::fs;
+use std::fs::File;
+use std::io::Write;
+use uuid::Uuid;
 
 pub struct Api {
     db: Arc<DbManager>,
@@ -41,6 +51,7 @@ impl Api {
                     joined_games,
                     create_map,
                     get_map,
+                    get_all_maps,
                 ],
             )
             .mount("/static", StaticFiles::from("./public/"))
@@ -82,7 +93,7 @@ struct GameCreateRequest {
     name: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, FromForm)]
 struct MapCreateRequest {
     token: String,
     name: String,
@@ -117,6 +128,13 @@ pub struct MapResponse {
     pub status: bool,
     pub msg: Option<String>,
     pub data: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListMapsResponse {
+    pub status: bool,
+    pub msg: Option<String>,
+    pub maps: Option<Vec<Map>>,
 }
 
 #[post("/api/users", format = "json", data = "<user>")]
@@ -294,47 +312,143 @@ fn join_game(state: State<'_, Api>, game_token: String, req: Json<Request>) -> J
         }
     }
 }
+fn write_data(path: &str, data: &Vec<u8>) -> Result<(), Box<dyn Error>> {
+    let mut file = File::create(path)?;
+    file.write_all(data)?;
+    Ok(())
+}
 
-#[post("/api/maps", format = "json", data = "<req>")]
-fn create_map(state: State<'_, Api>, req: Json<MapCreateRequest>) -> Json<Response> {
-    if let Ok(data) = base64::decode(&req.data) {
-        let result = executor::block_on(state.db.create_map(&req.token, &req.name, &data));
+// Unfortunately a lot of things still refuse to allow data with GET, so we can't use GET /api/maps.
+// This leaves us with a meh REST endpoint here.
+#[post("/api/maps/new", data = "<data>")]
+fn create_map(state: State<'_, Api>, content_type: &ContentType, data: Data) -> Json<Response> {
+    // Encoding the map straight as text is a bit awkward, but we're saving it directly to the
+    // database, not as a file on the filesystem.
+    let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
+        MultipartFormDataField::bytes("data"),
+        MultipartFormDataField::text("token"),
+        MultipartFormDataField::text("name"),
+    ]);
 
-        match result {
-            Ok(_) => Json(Response {
-                status: true,
-                msg: None,
-            }),
-            Err(DbError::Auth) => Json(Response {
-                status: false,
-                msg: Some("user not found".to_string()),
-            }),
-            Err(e) => {
-                warn!("ERROR: {}", e);
-                Json(Response {
-                    status: false,
-                    msg: Some("miscellaneous error".to_string()),
-                })
-            }
-        }
-    } else {
-        Json(Response {
+    let mut multipart_form_data = MultipartFormData::parse(content_type, data, options).unwrap();
+    let data = multipart_form_data.raw.remove("data");
+    let token = multipart_form_data.texts.remove("token");
+    let name = multipart_form_data.texts.remove("name");
+
+    // Validate the inputs.
+    // TODO: check that the data does actually form an image
+    if data.is_none() {
+        warn!("ERROR: malformed file data");
+        return Json(Response {
             status: false,
-            msg: Some("failed to decode map data".to_string()),
-        })
+            msg: Some("malformed file data".to_string()),
+        });
+    }
+
+    if token.is_none() {
+        warn!("ERROR: malformed user token");
+        return Json(Response {
+            status: false,
+            msg: Some("malformed user token".to_string()),
+        });
+    }
+
+    if name.is_none() {
+        warn!("ERROR: malformed map name");
+        return Json(Response {
+            status: false,
+            msg: Some("malformed map name".to_string()),
+        });
+    }
+
+    let data = data.unwrap().remove(0).raw;
+    info!("{}", base64::encode(&data));
+    let token = token.unwrap().remove(0).text;
+    let name = name.unwrap().remove(0).text;
+
+    let uuid = Uuid::new_v4();
+    let path = format!("{}/{}.png", CONFIG.upload_dir, uuid);
+
+    // Save data to file
+    if let Err(e) = write_data(&path, &data) {
+        warn!("ERROR saving image file: {}", e);
+        return Json(Response {
+            status: false,
+            msg: Some("upload error".to_string()),
+        });
+    }
+
+    let result = executor::block_on(state.db.create_map(&token, &name, &path));
+
+    match result {
+        Ok(_) => Json(Response {
+            status: true,
+            msg: None,
+        }),
+        Err(DbError::Auth) => Json(Response {
+            status: false,
+            msg: Some("user not found".to_string()),
+        }),
+        Err(DbError::AlreadyExists) => Json(Response {
+            status: false,
+            msg: Some("name already used".to_string()),
+        }),
+        Err(e) => {
+            warn!("ERROR: {}", e);
+            Json(Response {
+                status: false,
+                msg: Some("miscellaneous error".to_string()),
+            })
+        }
     }
 }
 
-#[post("/api/maps/<name>", format = "json", data = "<req>")]
+#[post("/api/maps/all", format = "json", data = "<req>")]
+fn get_all_maps(state: State<'_, Api>, req: Json<Request>) -> Json<ListMapsResponse> {
+    let result = executor::block_on(state.db.get_all_maps(&req.token));
+
+    match result {
+        Ok(data) => Json(ListMapsResponse {
+            status: true,
+            msg: None,
+            maps: Some(data),
+        }),
+        Err(DbError::Auth) => Json(ListMapsResponse {
+            status: false,
+            msg: Some("user not found".to_string()),
+            maps: None,
+        }),
+        Err(e) => {
+            warn!("ERROR: {}", e);
+            Json(ListMapsResponse {
+                status: false,
+                msg: Some("miscellaneous error".to_string()),
+                maps: None,
+            })
+        }
+    }
+}
+
+#[post("/api/maps/one/<name>", format = "json", data = "<req>")]
 fn get_map(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<MapResponse> {
     let result = executor::block_on(state.db.get_map(&req.token, &name));
 
     match result {
-        Ok(data) => Json(MapResponse {
-            status: true,
-            msg: None,
-            data: Some(base64::encode(data)),
-        }),
+        Ok(path) => match fs::read(&path) {
+            Ok(data) => Json(MapResponse {
+                status: true,
+                msg: None,
+                data: Some(base64::encode(data)),
+            }),
+            Err(e) => {
+                warn!("ERROR loading image file: {}", e);
+                Json(MapResponse {
+                    status: false,
+                    msg: Some("miscellaneous error".to_string()),
+                    data: None,
+                })
+            }
+        },
         Err(DbError::Auth) => Json(MapResponse {
             status: false,
             msg: Some("user not found".to_string()),
