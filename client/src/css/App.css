@@ -179,6 +179,22 @@ a {
     outline: none !important;
 }
 
+a:visited {
+    color: inherit;
+}
+
+a:link {
+    color: #e2cca4;
+}
+
+a:hover {
+    color: #a08b67;
+}
+
+a:active {
+    color: #7f6b45;
+}
+
 button {
     color: #e2cca4;
     background-color: #20243e;
@@ -197,4 +213,10 @@ button:hover {
 button:disabled {
     background-color: #20243e;
     cursor: default;
+}
+
+img.mapThumbnail {
+    width: 100px;
+    height: 100px;
+    cursor: pointer;
 }

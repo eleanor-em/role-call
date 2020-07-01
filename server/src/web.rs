@@ -16,7 +16,6 @@ use crate::config::CONFIG;
 use crate::db::{DbError, DbManager, Game, Map};
 
 // use futures::task::Context;
-use std::fs;
 use std::fs::File;
 use std::io::Write;
 use uuid::Uuid;
@@ -52,8 +51,10 @@ impl Api {
                     create_map,
                     get_map,
                     get_all_maps,
+                    delete_map,
                 ],
             )
+            .mount("/images", StaticFiles::from(&CONFIG.upload_dir))
             .mount("/static", StaticFiles::from("./public/"))
             .mount("/dist", StaticFiles::from("../client/dist"))
             .mount(
@@ -325,7 +326,7 @@ fn create_map(state: State<'_, Api>, content_type: &ContentType, data: Data) -> 
     // Encoding the map straight as text is a bit awkward, but we're saving it directly to the
     // database, not as a file on the filesystem.
     let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
-        MultipartFormDataField::bytes("data"),
+        MultipartFormDataField::bytes("data").size_limit(CONFIG.max_upload_mb),
         MultipartFormDataField::text("token"),
         MultipartFormDataField::text("name"),
     ]);
@@ -362,7 +363,6 @@ fn create_map(state: State<'_, Api>, content_type: &ContentType, data: Data) -> 
     }
 
     let data = data.unwrap().remove(0).raw;
-    info!("{}", base64::encode(&data));
     let token = token.unwrap().remove(0).text;
     let name = name.unwrap().remove(0).text;
 
@@ -434,21 +434,11 @@ fn get_map(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<MapR
     let result = executor::block_on(state.db.get_map(&req.token, &name));
 
     match result {
-        Ok(path) => match fs::read(&path) {
-            Ok(data) => Json(MapResponse {
-                status: true,
-                msg: None,
-                data: Some(base64::encode(data)),
-            }),
-            Err(e) => {
-                warn!("ERROR loading image file: {}", e);
-                Json(MapResponse {
-                    status: false,
-                    msg: Some("miscellaneous error".to_string()),
-                    data: None,
-                })
-            }
-        },
+        Ok(path) => Json(MapResponse {
+            status: true,
+            msg: None,
+            data: Some(format!("/images{}", path.replace(&CONFIG.upload_dir, ""))),
+        }),
         Err(DbError::Auth) => Json(MapResponse {
             status: false,
             msg: Some("user not found".to_string()),
@@ -460,6 +450,29 @@ fn get_map(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<MapR
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
                 data: None,
+            })
+        }
+    }
+}
+
+#[delete("/api/maps/one/<name>", format = "json", data = "<req>")]
+fn delete_map(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<Response> {
+    let result = executor::block_on(state.db.delete_map(&req.token, &name));
+
+    match result {
+        Ok(_) => Json(Response {
+            status: true,
+            msg: None,
+        }),
+        Err(DbError::Auth) => Json(Response {
+            status: false,
+            msg: Some("user not found".to_string()),
+        }),
+        Err(e) => {
+            warn!("ERROR: {}", e);
+            Json(Response {
+                status: false,
+                msg: Some("miscellaneous error".to_string()),
             })
         }
     }

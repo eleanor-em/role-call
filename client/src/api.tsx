@@ -134,6 +134,17 @@ async function getMap(user: User, name: string): Promise<MapResponse> {
     return await response.json();
 }
 
+async function deleteMap(user: User, name: string): Promise<Response> {
+    const response = await fetch(`${BASE_URL}/api/maps/one/${name}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json;charset=utf-8'
+        },
+        body: JSON.stringify(user)
+    });
+    return await response.json();
+}
+
 export const api = {
     check,
     auth,
@@ -143,4 +154,5 @@ export const api = {
     createMap,
     getAllMaps,
     getMap,
+    deleteMap,
 };

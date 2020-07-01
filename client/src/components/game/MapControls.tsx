@@ -30,30 +30,39 @@ export function MapControls(props: MapControlsProps): React.ReactElement {
     const [buttonActive, setButtonActive] = useState(true);
     const [maps, setMaps] = useState([]);
 
-    useEffect(() => {
-        const loadMaps = async () => {
-            const allMaps = await api.getAllMaps(props.comms.user);
-            if (allMaps.status) {
-                const finalMaps = [];
-                for (const map of allMaps.maps) {
-                    const mapData = await api.getMap(props.comms.user, map.name);
-                    if (mapData.status) {
-                        const uri = `data:image/png;base64, ${mapData.data}`;
-                        finalMaps.push({
-                            name: map.name,
-                            uri,
-                        });
-                    } else {
-                        console.error(`failed to download map ${map.name}`);
-                    }
+    async function loadMaps(): Promise<void> {
+        const allMaps = await api.getAllMaps(props.comms.user);
+        if (allMaps.status) {
+            const finalMaps = [];
+            for (const map of allMaps.maps) {
+                const mapData = await api.getMap(props.comms.user, map.name);
+                if (mapData.status) {
+                    finalMaps.push({
+                        name: map.name,
+                        url: mapData.data,
+                    });
+                } else {
+                    console.error(`failed to download map ${map.name}`);
                 }
-                setMaps(finalMaps);
-            } else {
-                console.error('failed to get map list');
             }
-        };
+            setMaps(finalMaps);
+        } else {
+            console.error('failed to get map list');
+        }
+    }
+
+    function loadMapsSync(): void {
         loadMaps().then(_ => {});
-    }, []);
+    }
+
+    function deleteMapSync(name: string): void {
+        api.deleteMap(props.comms.user, name)
+            .then(loadMapsSync)
+            .catch(console.error);
+    }
+
+    // Load maps on startup
+    useEffect(loadMapsSync, []);
 
     function openModal() {
         setUploadMapOpen(true);
@@ -68,6 +77,7 @@ export function MapControls(props: MapControlsProps): React.ReactElement {
         setButtonActive(true);
         setMapName('');
         setSelectedFile(null);
+        loadMapsSync();
     }
 
     function textChangeHandler(event: any) {
@@ -77,7 +87,6 @@ export function MapControls(props: MapControlsProps): React.ReactElement {
     function fileChangeHandler(event: any) {
         const file = event.target.files[0];
         setSelectedFile(file);
-        console.log('selected');
 
         if (mapName.length == 0) {
             setMapName(file.name.replace(/\..*/, ''));
@@ -96,9 +105,7 @@ export function MapControls(props: MapControlsProps): React.ReactElement {
     }
 
     function startUpload() {
-        console.log(selectedFile);
         if (selectedFile) {
-            console.log('start upload');
             setButtonActive(false);
             doUpload().then(r => {}).catch(console.error);
         }
@@ -110,7 +117,9 @@ export function MapControls(props: MapControlsProps): React.ReactElement {
             <ul>
                 {/* TODO: Placeholder code */ maps.map(map => (
                     <li key={map.name}>
-                        <img src={map.uri} alt={map.name} />
+                        {map.name} (<span title={"delete"}><a href="#" onClick={() => deleteMapSync(map.name)}>x</a></span>)
+                        <br/>
+                        <img className="mapThumbnail" src={map.url} alt={map.name} />
                     </li>
                 ))}
             </ul>

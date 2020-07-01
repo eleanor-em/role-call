@@ -20,6 +20,7 @@ pub struct Config {
     pub db_name: String,
     pub listen_addr: String,
     pub upload_dir: String,
+    pub max_upload_mb: u64,
 }
 
 fn load_config() -> Config {
@@ -71,7 +72,13 @@ fn load_config() -> Config {
     let db_password = env::var("RC_DB_PASSWORD").unwrap_or("password".to_string());
     let db_name = env::var("RC_DB_NAME").unwrap_or("rolecall".to_string());
     let listen_addr = env::var("RC_WEBSOCKET_ADDR").unwrap_or("0.0.0.0:9000".to_string());
-    let upload_dir = env::var("RC_UPLOAD_PATH").unwrap_or("upload/".to_string());
+    let upload_dir = env::var("RC_UPLOAD_PATH").unwrap_or("upload".to_string());
+    let max_upload_mb = env::var("RC_MAX_UPLOAD_MB")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(20)
+        * 1024
+        * 1024;
 
     Config {
         user_token_timeout,
@@ -85,6 +92,7 @@ fn load_config() -> Config {
         db_name,
         listen_addr,
         upload_dir,
+        max_upload_mb,
     }
 }
 

@@ -503,7 +503,10 @@ impl DbManager {
             .await
         {
             Ok(_) => {
-                info!("added map \"{}\" to user #{} ({})", name, user_id, username);
+                info!(
+                    "added map \"{}\" to user #{} ({}) at {}",
+                    name, user_id, username, path
+                );
                 Ok(())
             }
             Err(_) => {
@@ -539,6 +542,23 @@ impl DbManager {
         if rows.len() > 0 {
             let data = rows.get(0).ok_or(DbError::Auth)?.get(0);
             Ok(data)
+        } else {
+            Err(DbError::Auth)
+        }
+    }
+
+    pub async fn delete_map(&self, user_token: &str, name: &str) -> Result<(), DbError> {
+        let (user_id, username) = self.get_account(user_token).await?;
+        let statement = "
+            DELETE FROM maps
+            WHERE owner=$1 AND name=$2;";
+        let rows = self.client.query(statement, &[&user_id, &name]).await?;
+        if rows.len() > 0 {
+            info!(
+                "deleted map \"{}\" from user #{} ({})",
+                name, user_id, username
+            );
+            Ok(())
         } else {
             Err(DbError::Auth)
         }
