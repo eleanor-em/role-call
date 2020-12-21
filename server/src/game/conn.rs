@@ -179,6 +179,7 @@ pub async fn ws_listen(db: Arc<DbManager>, addr: &str) -> Result<(), GameError> 
     let mut listener = TcpListener::bind(addr).await?;
     info!("Listening at: {}", addr);
     while let Ok((stream, _)) = listener.accept().await {
+        info!("Received connection from {}", stream.peer_addr()?);
         tokio::spawn(run_server(db.clone(), stream));
     }
     Ok(())

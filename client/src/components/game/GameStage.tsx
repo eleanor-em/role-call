@@ -264,6 +264,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             prevTypeToPlace = typeToPlace;
             typeToPlace = TokenType.None;
             setHideToken(true);
+            forceRender();
         }
     }
 

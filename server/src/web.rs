@@ -16,6 +16,7 @@ use crate::config::CONFIG;
 use crate::db::{DbError, DbManager, Game, Map};
 
 // use futures::task::Context;
+use rocket_cors::CorsOptions;
 use std::fs::File;
 use std::io::Write;
 use uuid::Uuid;
@@ -36,6 +37,7 @@ impl Api {
 
     pub fn start(self) {
         rocket::ignite()
+            .attach(CorsOptions::default().to_cors().unwrap())
             .mount(
                 "/",
                 routes![
@@ -55,7 +57,7 @@ impl Api {
                 ],
             )
             .mount("/images", StaticFiles::from(&CONFIG.upload_dir))
-            .mount("/static", StaticFiles::from("./public/"))
+            .mount("/static", StaticFiles::from("../client/public/"))
             .mount("/dist", StaticFiles::from("../client/dist"))
             .mount(
                 "/react",

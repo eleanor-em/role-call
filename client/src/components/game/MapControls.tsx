@@ -31,13 +31,13 @@ export function MapControls(props: MapControlsProps): React.ReactElement {
     const [maps, setMaps] = useState([]);
 
     async function loadMaps(): Promise<void> {
-        const allMaps = await api.getAllMaps(props.comms.user);
-        if (allMaps.status) {
-            const finalMaps = [];
-            for (const map of allMaps.maps) {
+        const allProps = await api.getAllMaps(props.comms.user);
+        if (allProps.status) {
+            const finalProps = [];
+            for (const map of allProps.maps) {
                 const mapData = await api.getMap(props.comms.user, map.name);
                 if (mapData.status) {
-                    finalMaps.push({
+                    finalProps.push({
                         name: map.name,
                         url: mapData.data,
                     });
@@ -45,7 +45,7 @@ export function MapControls(props: MapControlsProps): React.ReactElement {
                     console.error(`failed to download map ${map.name}`);
                 }
             }
-            setMaps(finalMaps);
+            setMaps(finalProps);
         } else {
             console.error('failed to get map list');
         }

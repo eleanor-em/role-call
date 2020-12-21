@@ -1,3 +1,4 @@
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const Dotenv = require('dotenv-webpack');
 
@@ -37,12 +38,18 @@ module.exports = {
     },
 
     plugins: [
+        new CopyWebpackPlugin({
+            patterns: [
+                { from: 'public', to: 'static' }
+            ]
+        }),
         new HtmlWebpackPlugin({
-            template: './index.html'
+            inject: false,
+            template: './index.html',
         }),
         new Dotenv({
             path: '.env'
-        })
+        }),
     ],
 
     // When importing a module whose path matches one of the following, just

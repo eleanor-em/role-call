@@ -21,6 +21,7 @@ export const App = function(): React.ReactElement {
     const [user, setUser] = useState(null as User);
     const [cookies, setCookie] = useCookies([]);
 
+
     async function login(email: string, password: string): Promise<void> {
         setMessage('');
         setAppState(AppState.Loading);

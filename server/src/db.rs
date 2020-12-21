@@ -36,6 +36,7 @@ pub enum DbError {
     ConfigParse,
     Auth,
     AlreadyExists,
+    DiskError,
 }
 
 impl From<tokio_postgres::Error> for DbError {
@@ -549,16 +550,34 @@ impl DbManager {
 
     pub async fn delete_map(&self, user_token: &str, name: &str) -> Result<(), DbError> {
         let (user_id, username) = self.get_account(user_token).await?;
+
+        // Look up file name first
         let statement = "
-            DELETE FROM maps
+            SELECT path
+            FROM maps
             WHERE owner=$1 AND name=$2;";
+
         let rows = self.client.query(statement, &[&user_id, &name]).await?;
         if rows.len() > 0 {
-            info!(
-                "deleted map \"{}\" from user #{} ({})",
-                name, user_id, username
-            );
-            Ok(())
+            let path = rows.get(0).ok_or(DbError::Auth)?.get(0);
+
+            // Attempt to delete from database
+            let statement = "
+                DELETE FROM maps
+                WHERE owner=$1 AND name=$2;";
+            let rows = self.client.query(statement, &[&user_id, &name]).await?;
+            if rows.len() > 0 {
+                info!(
+                    "deleted map \"{}\" from user #{} ({})",
+                    name, user_id, username
+                );
+
+                // Delete from disk
+                std::fs::remove_file(path).map_err(|_| DbError::DiskError)?;
+                Ok(())
+            } else {
+                Err(DbError::Auth)
+            }
         } else {
             Err(DbError::Auth)
         }
