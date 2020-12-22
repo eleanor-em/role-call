@@ -101,10 +101,11 @@ impl GameConnection {
             Ok(perm) => {
                 // Load user information
                 match db.get_account(&self.user_token).await {
-                    Ok((_, username)) => {
+                    Ok((id, username)) => {
                         let user = UserInfo {
                             token: self.user_token,
                             username,
+                            id,
                             is_host: perm == GamePermission::Host,
                         };
                         let (tx, rx) = std::sync::mpsc::sync_channel(100);

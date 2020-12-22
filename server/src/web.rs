@@ -51,8 +51,8 @@ impl Api {
                     hosted_games,
                     joined_games,
                     create_obj,
-                    get_obj,
-                    get_all_objs,
+                    get_owned_objs,
+                    get_other_objs,
                     delete_obj,
                 ],
             )
@@ -124,13 +124,6 @@ pub struct ListGamesResponse {
     pub status: bool,
     pub msg: Option<String>,
     pub games: Option<Vec<Game>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ObjResponse {
-    pub status: bool,
-    pub msg: Option<String>,
-    pub data: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -403,9 +396,9 @@ fn create_obj(state: State<'_, Api>, content_type: &ContentType, data: Data) -> 
     }
 }
 
-#[post("/api/objs/all", format = "json", data = "<req>")]
-fn get_all_objs(state: State<'_, Api>, req: Json<Request>) -> Json<ListObjsResponse> {
-    let result = executor::block_on(state.db.get_all_objs(&req.token));
+#[post("/api/objs/owned", format = "json", data = "<req>")]
+fn get_owned_objs(state: State<'_, Api>, req: Json<Request>) -> Json<ListObjsResponse> {
+    let result = executor::block_on(state.db.get_owned_objs(&req.token));
 
     match result {
         Ok(data) => Json(ListObjsResponse {
@@ -429,29 +422,30 @@ fn get_all_objs(state: State<'_, Api>, req: Json<Request>) -> Json<ListObjsRespo
     }
 }
 
-// Unfortunately a lot of things still refuse to allow data with GET, so we can't use GET /api/objs/one/<name>.
-// This leaves us with a meh REST endpoint here.
-#[post("/api/objs/one/<name>", format = "json", data = "<req>")]
-fn get_obj(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<ObjResponse> {
-    let result = executor::block_on(state.db.get_obj(&req.token, &name));
+#[post("/api/objs/owned/by/<id>", format = "json", data = "<req>")]
+fn get_other_objs(state: State<'_, Api>, id: String, req: Json<Request>) -> Json<ListObjsResponse> {
+    let result = id
+        .parse()
+        .map_err(|_| DbError::Parse)
+        .and_then(|id| executor::block_on(state.db.get_other_objs(&req.token, id)));
 
     match result {
-        Ok(path) => Json(ObjResponse {
+        Ok(data) => Json(ListObjsResponse {
             status: true,
             msg: None,
-            data: Some(format!("/images{}", path.replace(&CONFIG.upload_dir, ""))),
+            objs: Some(data),
         }),
-        Err(DbError::Auth) => Json(ObjResponse {
+        Err(DbError::Auth) => Json(ListObjsResponse {
             status: false,
-            msg: Some("user not found".to_string()),
-            data: None,
+            msg: Some("permission denied".to_string()),
+            objs: None,
         }),
         Err(e) => {
             warn!("ERROR: {}", e);
-            Json(ObjResponse {
+            Json(ListObjsResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
-                data: None,
+                objs: None,
             })
         }
     }

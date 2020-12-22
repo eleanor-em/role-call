@@ -3,12 +3,31 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ProtocolMessage {
     PlaceToken(Token),
-    DeleteToken { token_id: String },
-    Movement { id: String, token_id: String, dx: i16, dy: i16 },
-    SetController {token_id: String, new_controller: String },
-    Connect { username: String, host: bool },
-    Disconnect { username: String },
-    FailedConnection { reason: String },
+    DeleteToken {
+        token_id: String,
+    },
+    Movement {
+        id: String,
+        token_id: String,
+        dx: i16,
+        dy: i16,
+    },
+    PlaceObj(PlacedObj),
+    SetController {
+        token_id: String,
+        new_controller: String,
+    },
+    Connect {
+        username: String,
+        host: bool,
+        host_id: i32,
+    },
+    Disconnect {
+        username: String,
+    },
+    FailedConnection {
+        reason: String,
+    },
 }
 
 impl ProtocolMessage {
@@ -41,5 +60,20 @@ pub struct Token {
 impl Token {
     pub fn to_msg(&self) -> ProtocolMessage {
         ProtocolMessage::PlaceToken(self.clone())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PlacedObj {
+    pub id: Option<String>,
+    pub obj_id: i32,
+    pub x: i16,
+    pub y: i16,
+    pub controller: Option<String>,
+}
+
+impl PlacedObj {
+    pub fn to_msg(&self) -> ProtocolMessage {
+        ProtocolMessage::PlaceObj(self.clone())
     }
 }

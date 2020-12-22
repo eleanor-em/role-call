@@ -18,6 +18,17 @@ pub struct Game {
 pub struct Object {
     id: i32,
     name: String,
+    url: String,
+}
+
+impl Object {
+    pub fn new(id: i32, name: String, path: String) -> Object {
+        Object {
+            id,
+            name,
+            url: format!("/images{}", path.replace(&CONFIG.upload_dir, "")),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -37,6 +48,7 @@ pub enum DbError {
     Auth,
     AlreadyExists,
     DiskError,
+    Parse,
 }
 
 impl From<tokio_postgres::Error> for DbError {
@@ -517,19 +529,16 @@ impl DbManager {
         }
     }
 
-    pub async fn get_all_objs(&self, user_token: &str) -> Result<Vec<Object>, DbError> {
+    pub async fn get_owned_objs(&self, user_token: &str) -> Result<Vec<Object>, DbError> {
         let (user_id, _) = self.get_account(user_token).await?;
         let statement = "
-            SELECT id, name
+            SELECT id, name, path
             FROM objects
             WHERE owner=$1;";
         let rows = self.client.query(statement, &[&user_id]).await?;
         Ok(rows
             .into_iter()
-            .map(|row| Object {
-                id: row.get(0),
-                name: row.get(1),
-            })
+            .map(|row| Object::new(row.get(0), row.get(1), row.get(2)))
             .collect())
     }
 
@@ -578,6 +587,42 @@ impl DbManager {
             } else {
                 Err(DbError::Auth)
             }
+        } else {
+            Err(DbError::Auth)
+        }
+    }
+
+    pub async fn get_other_objs(
+        &self,
+        user_token: &str,
+        other_id: i32,
+    ) -> Result<Vec<Object>, DbError> {
+        let (user_id, _) = self.get_account(user_token).await?;
+        // Check if this user is in a game with the other ID
+        let statement = "
+            SELECT COUNT(1)
+            FROM games
+            INNER JOIN user_games
+                ON user_games.user_id=$1
+                AND user_games.game_id=games.id
+            WHERE host=$2;";
+        let row = self
+            .client
+            .query_one(statement, &[&user_id, &other_id])
+            .await?;
+        let count: i64 = row.get(0);
+
+        if count > 0 {
+            let statement = "
+                SELECT id, name, path
+                FROM objects
+                WHERE owner=$1;";
+            let rows = self.client.query(statement, &[&other_id]).await?;
+
+            Ok(rows
+                .into_iter()
+                .map(|row| Object::new(row.get(0), row.get(1), row.get(2)))
+                .collect())
         } else {
             Err(DbError::Auth)
         }

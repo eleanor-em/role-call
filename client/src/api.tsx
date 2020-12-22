@@ -112,8 +112,19 @@ async function createObj(user: User, name: string, file: File): Promise<CheckRes
     return await response.json();
 }
 
-async function getAllObjs(user: User): Promise<ListObjsResponse> {
-    const response = await fetch(`${BASE_URL}/api/objs/all`, {
+async function getOwnedObjs(user: User): Promise<ListObjsResponse> {
+    const response = await fetch(`${BASE_URL}/api/objs/owned`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json;charset=utf-8'
+        },
+        body: JSON.stringify(user)
+    });
+    return await response.json();
+}
+
+async function getOtherObjs(user: User, id: number): Promise<ListObjsResponse> {
+    const response = await fetch(`${BASE_URL}/api/objs/owned/by/${id}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json;charset=utf-8'
@@ -152,7 +163,8 @@ export const api = {
     hostedGames,
     joinedGames,
     createObj,
-    getAllObjs,
+    getOwnedObjs,
+    getOtherObjs,
     getObj,
     deleteObj,
 };

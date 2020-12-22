@@ -5,7 +5,7 @@ import {Comms} from './CommsComponent';
 import {ArrowKey, drawToken, HighlightType, TokenManager, TokenType} from './TokenManager';
 import {StoredPlayer} from "./GameLanding";
 import {GameObj} from "../../models/GameObj";
-import {drawObject} from "./ObjManager";
+import {drawSelectedObject, ObjManager} from "./ObjManager";
 
 function useWindowSize() {
     const [size, setSize] = useState([0, 0]);
@@ -30,7 +30,9 @@ export interface GameStageProps {
     comms: Comms,
     tokenColour: string,
     tokenType: TokenType,
+
     setTokenType(type: TokenType): void,
+
     selectedObj: GameObj,
     players: StoredPlayer[],
 }
@@ -61,7 +63,7 @@ export class Renderer {
     }
 
     // Listeners should use a unique reference string, to prevent duplicate listeners.
-    addRenderListener(ref: string, listener: ((ctx: CanvasRenderingContext2D, cellSize: number) => void), depth=0): void {
+    addRenderListener(ref: string, listener: ((ctx: CanvasRenderingContext2D, cellSize: number) => void), depth = 0): void {
         this.renderListeners[ref] = listener;
         this.renderListenerDepths[ref] = depth;
     }
@@ -69,7 +71,7 @@ export class Renderer {
     snapToGrid(point: Point): Point {
         const x = Math.floor(point.x / this.cellSize) * this.cellSize;
         const y = Math.floor(point.y / this.cellSize) * this.cellSize;
-        return { x, y };
+        return {x, y};
     }
 
     render(translation: Point, scale: number): void {
@@ -116,7 +118,7 @@ export class Renderer {
             ctx.lineTo(this.width / scale + x0, y);
         }
         ctx.closePath();
-        
+
         ctx.stroke();
     }
 }
@@ -124,20 +126,23 @@ export class Renderer {
 let prevTypeToPlace = TokenType.None;
 let typeToPlace = TokenType.None;
 let renderer: Renderer = null;
+
+let loaded = false;
 let tokenManager: TokenManager = null;
+let objManager: ObjManager = null;
 
 export function GameStage(props: GameStageProps): React.ReactElement {
     const [hideToken, setHideToken] = useState(false);
     const [cursor, setCursor] = useState('default');
     const [forcePointer, setForcePointer] = useState(false);
 
-    const [mouseCoord, setMouseCoord] = useState({ x: 0, y: 0 });
+    const [mouseCoord, setMouseCoord] = useState({x: 0, y: 0});
     // grid coord is used to hook updates since we don't need to update if we haven't moved to a new cell
-    const [mouseGridCoord, setMouseGridCoord] = useState({ x: 0, y: 0 });
+    const [mouseGridCoord, setMouseGridCoord] = useState({x: 0, y: 0});
 
     const [dragGrid, setDragGrid] = useState(false);
     const [scale, setScale] = useState(1);
-    const [translation, setTranslation] = useState({ x: 0, y: 0 });
+    const [translation, setTranslation] = useState({x: 0, y: 0});
     const [winWidth, winHeight] = useWindowSize();
 
     const [modifiers, setModifiers] = useState({
@@ -151,8 +156,10 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     if (renderer == null) {
         renderer = new Renderer();
     }
-    if (tokenManager == null && props.comms != null) {
+    if (!loaded && props.comms != null) {
+        objManager = new ObjManager(props.comms, renderer, forceRender, setForcePointer);
         tokenManager = new TokenManager(props.comms, renderer, forceRender, setForcePointer);
+        loaded = true;
     }
     useEffect(() => {
         renderer.width = window.innerWidth * 4 / 5;
@@ -164,9 +171,11 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     // Update the token manager every time we get a new player list
     tokenManager.players = props.players;
+    objManager.players = props.players;
 
     // Invert this flag to force a re-render despite useEffect tags
     const [forceRenderFlag, setForceRender] = useState(false);
+
     function forceRender() {
         setForceRender(!forceRenderFlag);
     }
@@ -180,15 +189,18 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
 
     function renderPreview(ctx: CanvasRenderingContext2D, cellSize: number): void {
-        const { x, y } = renderer.snapToGrid(renderer.transform(mouseCoord));
+        const {x: mx, y: my} = renderer.transform(mouseCoord);
+
         if (!modifiers.shift && !modifiers.ctrl) {
             if (typeToPlace != TokenType.None) {
+                const {x, y} = renderer.snapToGrid({x: mx, y: my});
                 drawToken(ctx, typeToPlace, x, y, cellSize, props.tokenColour, HighlightType.Select);
             } else if (props.selectedObj != null) {
-                drawObject(ctx, x, y, cellSize);
+                drawSelectedObject(ctx, mx, my, props.comms.getObjectImageElem(props.selectedObj.id));
             }
         }
     }
+
     renderer?.addRenderListener('SelectedPreview', renderPreview, -1);
 
     function handleMouseMove(ev: any): void {
@@ -201,16 +213,16 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         if (dragGrid) {
             const dx = mx - mouseCoord.x;
             const dy = my - mouseCoord.y;
-            setTranslation({ x: translation.x + dx, y: translation.y + dy });
+            setTranslation({x: translation.x + dx, y: translation.y + dy});
         }
 
-        const coord = { x: mx, y: my };
+        const coord = {x: mx, y: my};
         setMouseCoord(coord);
         tokenManager?.setMouseCoord(coord);
 
-        const { x, y } = renderer.snapToGrid(coord);
+        const {x, y} = renderer.snapToGrid(coord);
         if (x != mouseGridCoord.x || y != mouseGridCoord.y) {
-            setMouseGridCoord({ x, y });
+            setMouseGridCoord({x, y});
             forceRender();
         }
     }
@@ -219,7 +231,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         const bounds = ev.target.getBoundingClientRect();
         const mx = ev.clientX - Math.round(bounds.left);
         const my = ev.clientY - Math.round(bounds.top);
-        const mouse = { x: mx, y: my };
+        const mouse = {x: mx, y: my};
 
         switch (ev.button) {
             case 0:
@@ -251,6 +263,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             }
         } else if (typeToPlace != TokenType.None) {
             onPlaceToken(mouse);
+        } else if (props.selectedObj) {
+            onPlaceObj(mouse);
         } else {
             tokenManager?.onClick();
         }
@@ -259,9 +273,14 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function onPlaceToken(mouse: Point): void {
         // send a place message and reset the selected typeStoredPlayer
-        const { x, y } = renderer.snapToGrid(renderer.transform(mouse));
+        const {x, y} = renderer.snapToGrid(renderer.transform(mouse));
         props.comms?.placeToken(typeToPlace, x, y, props.tokenColour);
         props.setTokenType(TokenType.None);
+    }
+
+    function onPlaceObj(mouse: Point): void {
+        const {x, y} = renderer.transform(mouse);
+        props.comms?.placeObj(props.selectedObj.id, x, y);
     }
 
     function onZoomIn(mouse: Point, scaleFactor: number): void {
@@ -388,7 +407,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function handleKeyPress(ev: any): void {
         if (ev.key == ' ') {
-            setTranslation({ x: 0, y: 0 });
+            setTranslation({x: 0, y: 0});
             setScale(1);
         }
     }
@@ -447,14 +466,14 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     return (
         <>
             <canvas id="stage" width={renderer.width} height={renderer.height}
-                onMouseMove={handleMouseMove}
-                onMouseDown={handleMouseDown}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseLeave}
-                onMouseEnter={handleMouseEnter}
-                onWheel={handleOnWheel}
-                onContextMenu={e => e.preventDefault()} // disable context menu
-                style={{ cursor: finalCursor, border: '1px solid white' }}
+                    onMouseMove={handleMouseMove}
+                    onMouseDown={handleMouseDown}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseLeave}
+                    onMouseEnter={handleMouseEnter}
+                    onWheel={handleOnWheel}
+                    onContextMenu={e => e.preventDefault()} // disable context menu
+                    style={{cursor: finalCursor, border: '1px solid white'}}
             />
         </>
     );

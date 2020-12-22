@@ -4,6 +4,9 @@ import { useEffect } from 'react';
 import { User } from '../../models/User';
 import { TokenType, Token } from './TokenManager';
 import {Point} from "./GameStage";
+import {PlacedObj} from "./ObjManager";
+import {api} from "../../api";
+import {GameObj} from "../../models/GameObj";
 
 export type PlaceTokenMessage = Token;
 
@@ -17,6 +20,8 @@ export interface MoveTokenMessage {
     dx: number,
     dy: number,
 }
+
+export type PlaceObjMessage = PlacedObj;
 
 export interface SetControllerMessage {
     token_id: string,
@@ -44,16 +49,26 @@ export interface Movement {
 
 export class Comms {
     socket: W3cWebSocket;
+
     placeTokenListeners: Record<string, (msg: PlaceTokenMessage) => void> = {};
     deleteTokenListeners: Record<string, (msg: DeleteTokenMessage) => void> = {};
-    setControllerListeners: Record<string, (msg: SetControllerMessage) => void> = {};
     moveTokenListeners: Record<string, (msg: MoveTokenMessage) => void> = {};
+    setControllerListeners: Record<string, (msg: SetControllerMessage) => void> = {};
+
+    placeObjListeners: Record<string, (msg: PlaceObjMessage) => void> = {};
+
     connectListeners: Record<string, (msg: ConnectMessage) => void> = {};
     disconnectListeners: Record<string, (msg: DisconnectMessage) => void> = {};
+
     failedListeners: Record<string, (msg: FailedConnectionMessage) => void> = {};
+
     shouldShowRefresh = true;
     isHost = false;
+    hostId = -1;
     user: User = null;
+
+    allObjs: Record<number, GameObj> = {};
+    loading = false;
 
     constructor(socket: W3cWebSocket, props: CommsProps) {
         this.socket = socket;
@@ -87,11 +102,16 @@ export class Comms {
                     Object.values(this.moveTokenListeners).forEach(op => op(data));
                     break;
                 }
+                case 'PlaceObj': {
+                    Object.values(this.placeObjListeners).forEach(op => op(data));
+                    break;
+                }
                 case 'SetController': {
                     Object.values(this.setControllerListeners).forEach(op => op(data));
                     break;
                 }
                 case 'Connect': {
+                    this.hostId = data.host_id;
                     Object.values(this.connectListeners).forEach(op => op(data));
                     break;
                 }
@@ -129,6 +149,12 @@ export class Comms {
         }));
     }
 
+    placeObj(obj_id: number, x: number, y: number) {
+        this.socket.send(JSON.stringify({
+            PlaceObj: { obj_id, x, y }
+        }));
+    }
+
     setController(token_id: string, new_controller: string): void {
         this.socket.send(JSON.stringify({
             SetController: { token_id, new_controller }
@@ -142,6 +168,10 @@ export class Comms {
 
     addDeleteTokenListener(ref: string, listener: ((msg: DeleteTokenMessage) => void)): void {
         this.deleteTokenListeners[ref] = listener;
+    }
+
+    addPlaceObjListener(ref: string, listener: ((msg: PlaceObjMessage) => void)): void {
+        this.placeObjListeners[ref] = listener;
     }
 
     addMoveTokenListener(ref: string, listener: ((msg: MoveTokenMessage) => void)): void {
@@ -162,6 +192,56 @@ export class Comms {
 
     addFailedListener(ref: string, listener: ((msg: FailedConnectionMessage) => void)): void {
         this.failedListeners[ref] = listener;
+    }
+
+    // TODO: caching for below
+    async loadObjs(setObjs: (objs: GameObj[]) => void): Promise<void> {
+        const allObjs = this.isHost
+            ? await api.getOwnedObjs(this.user)
+            : await api.getOtherObjs(this.user, this.hostId);
+        if (allObjs.status) {
+            setObjs(allObjs.objs);
+        } else {
+            console.error('failed to get object list');
+        }
+    }
+
+    loadObjsSync(setObjs: (objs: GameObj[]) => void): void {
+        this.loadObjs(setObjs).then(_ => {
+        });
+    }
+
+    // This function caches image downloads from the server
+    getObjectImageElem(obj_id: number): HTMLImageElement {
+        if (!(obj_id in this.allObjs)) {
+            if (!this.loading) {
+                this.loading = true;
+                // re-download the object list
+                // TODO: use cache diff instead
+                this.loadObjsSync(res => {
+                    for (const obj of res) {
+                        this.allObjs[obj.id] = obj;
+                    }
+                    this.loading = false;
+                });
+            }
+            return null;
+        }
+
+        // look for a hidden element
+        const obj = this.allObjs[obj_id];
+        let elem = document.getElementById(`hidden-object-${obj_id}`);
+        if (!elem) {
+            const img = document.createElement('img');
+            img.id = `hidden-object-${obj_id}`;
+            img.alt = '';
+            img.src = obj.url;
+            img.hidden = true;
+            document.querySelector('body').appendChild(img);
+            elem = img;
+        }
+
+        return elem as HTMLImageElement;
     }
 }
 

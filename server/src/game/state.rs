@@ -1,4 +1,4 @@
-use crate::game::protocol::{ProtocolMessage, Token};
+use crate::game::protocol::{PlacedObj, ProtocolMessage, Token};
 use crate::game::server::UserInfo;
 use std::collections::HashMap;
 use std::sync::mpsc::SyncSender;
@@ -8,6 +8,8 @@ pub struct GameState {
     host: UserInfo,
     tokens: HashMap<String, Token>,
     token_count: usize,
+    placed_objs: HashMap<String, PlacedObj>,
+    placed_obj_count: usize,
 }
 
 impl GameState {
@@ -16,13 +18,16 @@ impl GameState {
             host,
             tokens: HashMap::new(),
             token_count: 0,
+            placed_objs: HashMap::new(),
+            placed_obj_count: 0,
         }
     }
 
     pub fn process(&mut self, msg: &mut ProtocolMessage) -> bool {
         match msg {
             ProtocolMessage::PlaceToken(token) => {
-                token.id = Some(format!("{}", self.token_count));
+                let token_id = format!("{}", self.token_count);
+                token.id = Some(token_id.clone());
                 self.token_count += 1;
                 // controller is automatically the host
                 token.controller = Some(self.host.username.clone());
@@ -32,7 +37,6 @@ impl GameState {
                     .values()
                     .any(|other| token.x == other.x && token.y == other.y)
                 {
-                    let token_id = token.id.clone().unwrap();
                     let token = (*token).clone();
                     self.tokens.insert(token_id, token);
                     true
@@ -41,6 +45,17 @@ impl GameState {
                 }
             }
             ProtocolMessage::DeleteToken { token_id } => self.tokens.remove(token_id).is_some(),
+            ProtocolMessage::PlaceObj(obj) => {
+                let id = format!("{}", self.placed_obj_count);
+                obj.id = Some(id.clone());
+                self.placed_obj_count += 1;
+                // controller is automatically the host
+                obj.controller = Some(self.host.username.clone());
+
+                let obj = (*obj).clone();
+                self.placed_objs.insert(id, obj);
+                true
+            }
             ProtocolMessage::SetController {
                 token_id,
                 new_controller,
@@ -77,6 +92,11 @@ impl GameState {
         self.tokens.values().for_each(|token| {
             if let Err(e) = tx.send(token.to_msg().to_string()) {
                 warn!("STATE: error forwarding token: {}", e)
+            }
+        });
+        self.placed_objs.values().for_each(|obj| {
+            if let Err(e) = tx.send(obj.to_msg().to_string()) {
+                warn!("STATE: error forwarding object: {}", e)
             }
         });
     }

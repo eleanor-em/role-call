@@ -48,6 +48,7 @@ pub struct UserInfo {
     pub token: String,
     pub username: String,
     pub is_host: bool,
+    pub id: i32,
 }
 
 impl Hash for UserInfo {
@@ -61,18 +62,22 @@ pub struct Server {
     clients: flurry::HashMap<UserInfo, SyncSender<String>>,
     keepalive: Mutex<Option<Instant>>,
     state: Mutex<GameState>,
+    host_id: i32,
 }
 
 impl Server {
     fn new(host: UserInfo, game_token: String) -> Self {
+        let host_id = host.id;
         let clients = flurry::HashMap::new();
         let state = Mutex::new(GameState::new(host));
         let keepalive = Mutex::new(Some(Instant::now()));
+
         Self {
             game_token,
             clients,
             state,
             keepalive,
+            host_id,
         }
     }
 
@@ -88,6 +93,7 @@ impl Server {
                 ProtocolMessage::Connect {
                     username: user.username.clone(),
                     host: user.is_host,
+                    host_id: self.host_id,
                 }
                 .to_string(),
             ) {
@@ -107,6 +113,7 @@ impl Server {
             ProtocolMessage::Connect {
                 username,
                 host: user.is_host,
+                host_id: self.host_id,
             }
             .into(),
             user,
@@ -136,9 +143,10 @@ impl Server {
 
     fn authorised(&self, msg: &ProtocolMessage, user: UserInfo) -> bool {
         match msg {
-            ProtocolMessage::PlaceToken { .. }
+            ProtocolMessage::PlaceToken(_)
             | ProtocolMessage::DeleteToken { .. }
-            | ProtocolMessage::SetController { .. } => user.is_host,
+            | ProtocolMessage::SetController { .. }
+            | ProtocolMessage::PlaceObj(_) => user.is_host,
             ProtocolMessage::Movement { token_id, .. } => {
                 user.is_host || {
                     let state = self.state.lock().unwrap();

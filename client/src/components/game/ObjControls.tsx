@@ -34,38 +34,10 @@ export function ObjControls(props: ObjControlsProps): React.ReactElement {
     const [buttonActive, setButtonActive] = useState(true);
     const [objs, setObjs] = useState([]);
 
-    // TODO: caching for below
-    async function loadObjs(): Promise<void> {
-        const allObjs = await api.getAllObjs(props.comms.user);
-        if (allObjs.status) {
-            const finalObjs = [];
-            for (const obj of allObjs.objs) {
-                const objData = await api.getObj(props.comms.user, obj.name);
-                if (objData.status) {
-                    finalObjs.push({
-                        id: obj.id,
-                        name: obj.name,
-                        url: objData.data,
-                    });
-                } else {
-                    console.error(`failed to download object ${obj.name}`);
-                }
-            }
-            setObjs(finalObjs);
-        } else {
-            console.error('failed to get object list');
-        }
-    }
-
-    function loadObjsSync(): void {
-        loadObjs().then(_ => {
-        });
-    }
-
     function deleteObjSync(name: string): void {
         if (confirm(`Delete object "${name}"?`)) {
             api.deleteObj(props.comms.user, name)
-                .then(loadObjsSync)
+                .then(() => props.comms.loadObjsSync(setObjs))
                 .catch(console.error);
         }
     }
@@ -79,7 +51,7 @@ export function ObjControls(props: ObjControlsProps): React.ReactElement {
     }
 
     // Load objects on startup
-    useEffect(loadObjsSync, []);
+    useEffect(() => props.comms.loadObjsSync(setObjs), []);
 
     function openModal() {
         setUploadObjOpen(true);
@@ -94,7 +66,7 @@ export function ObjControls(props: ObjControlsProps): React.ReactElement {
         setButtonActive(true);
         setObjName('');
         setSelectedFile(null);
-        loadObjsSync();
+        props.comms.loadObjsSync(setObjs);
     }
 
     function textChangeHandler(event: any) {
@@ -131,7 +103,7 @@ export function ObjControls(props: ObjControlsProps): React.ReactElement {
 
     return (
         <div>
-            <button onClick={openModal}>Create...</button>
+            <button onClick={openModal}>New...</button>
             <div className="object-list-container">
                 {objs.map(obj => (
                     <ObjThumbnail key={obj.name} selected={obj.name === props.selectedObj} name={obj.name} url={obj.url}

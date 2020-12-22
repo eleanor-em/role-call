@@ -13,7 +13,7 @@ export function ObjThumbnail(props: ObjThumbnailProps): React.ReactElement {
 
     return (
         <div className={className} onClick={props.objSelected}>
-            <img className="objThumbnail" src={props.url} alt={props.name}/>
+            <img className="objThumbnail" src={props.url} alt={props.name} draggable={false} onDragStart={e => e.preventDefault()}/>
             <br/>
             {props.name}
             &nbsp;
