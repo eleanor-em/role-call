@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {Comms, uuidv4} from './CommsComponent';
 import {Point, Renderer} from './GameStage';
 import {Anchor, PopupButton} from "./PopupButton";

@@ -13,7 +13,7 @@ use std::error::Error;
 use std::sync::Arc;
 
 use crate::config::CONFIG;
-use crate::db::{DbError, DbManager, Game, Map};
+use crate::db::{DbError, DbManager, Game, Object};
 
 // use futures::task::Context;
 use rocket_cors::CorsOptions;
@@ -50,10 +50,10 @@ impl Api {
                     join_game,
                     hosted_games,
                     joined_games,
-                    create_map,
-                    get_map,
-                    get_all_maps,
-                    delete_map,
+                    create_obj,
+                    get_obj,
+                    get_all_objs,
+                    delete_obj,
                 ],
             )
             .mount("/images", StaticFiles::from(&CONFIG.upload_dir))
@@ -97,7 +97,7 @@ struct GameCreateRequest {
 }
 
 #[derive(Serialize, Deserialize, FromForm)]
-struct MapCreateRequest {
+struct ObjCreateRequest {
     token: String,
     name: String,
     data: String,
@@ -127,17 +127,17 @@ pub struct ListGamesResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MapResponse {
+pub struct ObjResponse {
     pub status: bool,
     pub msg: Option<String>,
     pub data: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ListMapsResponse {
+pub struct ListObjsResponse {
     pub status: bool,
     pub msg: Option<String>,
-    pub maps: Option<Vec<Map>>,
+    pub objs: Option<Vec<Object>>,
 }
 
 #[post("/api/users", format = "json", data = "<user>")]
@@ -321,11 +321,9 @@ fn write_data(path: &str, data: &Vec<u8>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Unfortunately a lot of things still refuse to allow data with GET, so we can't use GET /api/maps.
-// This leaves us with a meh REST endpoint here.
-#[post("/api/maps/new", data = "<data>")]
-fn create_map(state: State<'_, Api>, content_type: &ContentType, data: Data) -> Json<Response> {
-    // Encoding the map straight as text is a bit awkward, but we're saving it directly to the
+#[post("/api/objs/new", data = "<data>")]
+fn create_obj(state: State<'_, Api>, content_type: &ContentType, data: Data) -> Json<Response> {
+    // Encoding the object straight as text is a bit awkward, but we're saving it directly to the
     // database, not as a file on the filesystem.
     let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
         MultipartFormDataField::bytes("data").size_limit(CONFIG.max_upload_mb),
@@ -380,7 +378,7 @@ fn create_map(state: State<'_, Api>, content_type: &ContentType, data: Data) -> 
         });
     }
 
-    let result = executor::block_on(state.db.create_map(&token, &name, &path));
+    let result = executor::block_on(state.db.create_obj(&token, &name, &path));
 
     match result {
         Ok(_) => Json(Response {
@@ -405,50 +403,52 @@ fn create_map(state: State<'_, Api>, content_type: &ContentType, data: Data) -> 
     }
 }
 
-#[post("/api/maps/all", format = "json", data = "<req>")]
-fn get_all_maps(state: State<'_, Api>, req: Json<Request>) -> Json<ListMapsResponse> {
-    let result = executor::block_on(state.db.get_all_maps(&req.token));
+#[post("/api/objs/all", format = "json", data = "<req>")]
+fn get_all_objs(state: State<'_, Api>, req: Json<Request>) -> Json<ListObjsResponse> {
+    let result = executor::block_on(state.db.get_all_objs(&req.token));
 
     match result {
-        Ok(data) => Json(ListMapsResponse {
+        Ok(data) => Json(ListObjsResponse {
             status: true,
             msg: None,
-            maps: Some(data),
+            objs: Some(data),
         }),
-        Err(DbError::Auth) => Json(ListMapsResponse {
+        Err(DbError::Auth) => Json(ListObjsResponse {
             status: false,
             msg: Some("user not found".to_string()),
-            maps: None,
+            objs: None,
         }),
         Err(e) => {
             warn!("ERROR: {}", e);
-            Json(ListMapsResponse {
+            Json(ListObjsResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
-                maps: None,
+                objs: None,
             })
         }
     }
 }
 
-#[post("/api/maps/one/<name>", format = "json", data = "<req>")]
-fn get_map(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<MapResponse> {
-    let result = executor::block_on(state.db.get_map(&req.token, &name));
+// Unfortunately a lot of things still refuse to allow data with GET, so we can't use GET /api/objs/one/<name>.
+// This leaves us with a meh REST endpoint here.
+#[post("/api/objs/one/<name>", format = "json", data = "<req>")]
+fn get_obj(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<ObjResponse> {
+    let result = executor::block_on(state.db.get_obj(&req.token, &name));
 
     match result {
-        Ok(path) => Json(MapResponse {
+        Ok(path) => Json(ObjResponse {
             status: true,
             msg: None,
             data: Some(format!("/images{}", path.replace(&CONFIG.upload_dir, ""))),
         }),
-        Err(DbError::Auth) => Json(MapResponse {
+        Err(DbError::Auth) => Json(ObjResponse {
             status: false,
             msg: Some("user not found".to_string()),
             data: None,
         }),
         Err(e) => {
             warn!("ERROR: {}", e);
-            Json(MapResponse {
+            Json(ObjResponse {
                 status: false,
                 msg: Some("miscellaneous error".to_string()),
                 data: None,
@@ -457,9 +457,9 @@ fn get_map(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<MapR
     }
 }
 
-#[delete("/api/maps/one/<name>", format = "json", data = "<req>")]
-fn delete_map(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<Response> {
-    let result = executor::block_on(state.db.delete_map(&req.token, &name));
+#[delete("/api/objs/one/<name>", format = "json", data = "<req>")]
+fn delete_obj(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<Response> {
+    let result = executor::block_on(state.db.delete_obj(&req.token, &name));
 
     match result {
         Ok(_) => Json(Response {

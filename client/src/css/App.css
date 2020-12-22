@@ -215,8 +215,41 @@ button:disabled {
     cursor: default;
 }
 
-img.mapThumbnail {
+img.objThumbnail {
     width: 100px;
     height: 100px;
     cursor: pointer;
+}
+
+div.modal-control-container {
+    display: flex;
+    margin-bottom: 0.5em;
+}
+
+button.modal-control {
+    flex: 1;
+}
+
+input.modal-control {
+    margin-left: 1em;
+}
+
+div.object-list-container {
+    display: flex;
+    flex-flow: wrap;
+}
+
+div.object-container {
+    flex: 1;
+    margin: 2px;
+    padding: 4px;
+    box-sizing: border-box;
+}
+
+div.object-container:hover {
+    background-color: #20243e;
+}
+
+div.object-selected {
+    outline: 1px #e2cca4 solid;
 }

@@ -1,6 +1,6 @@
 import { Game } from './models/Game';
 import { User } from './models/User';
-import {GameMap} from "./models/GameMap";
+import {GameObj} from "./models/GameObj";
 
 const BASE_URL = process.env.RC_API_URL;
 
@@ -28,13 +28,13 @@ export interface CheckResponse {
     msg?: string,
 }
 
-export interface ListMapsResponse {
+export interface ListObjsResponse {
     status: boolean,
     msg?: string,
-    maps?: [GameMap],
+    objs?: [GameObj],
 }
 
-export interface MapResponse {
+export interface ObjResponse {
     status: boolean,
     msg?: string,
     data?: string,
@@ -98,22 +98,22 @@ async function joinedGames(user: User): Promise<ListGamesResponse> {
     return await response.json();   
 }
 
-async function createMap(user: User, name: string, file: File): Promise<CheckResponse> {
-    const buffer = await file.arrayBuffer();
+async function createObj(user: User, name: string, file: File): Promise<CheckResponse> {
+    // const buffer = await file.arrayBuffer();
 
     const data = new FormData();
     data.append('token', user.token);
     data.append('name', name);
     data.append('data', file);
-    const response = await fetch(`${BASE_URL}/api/maps/new`, {
+    const response = await fetch(`${BASE_URL}/api/objs/new`, {
         method: 'POST',
         body: data
     });
     return await response.json();
 }
 
-async function getAllMaps(user: User): Promise<ListMapsResponse> {
-    const response = await fetch(`${BASE_URL}/api/maps/all`, {
+async function getAllObjs(user: User): Promise<ListObjsResponse> {
+    const response = await fetch(`${BASE_URL}/api/objs/all`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json;charset=utf-8'
@@ -123,8 +123,8 @@ async function getAllMaps(user: User): Promise<ListMapsResponse> {
     return await response.json();
 }
 
-async function getMap(user: User, name: string): Promise<MapResponse> {
-    const response = await fetch(`${BASE_URL}/api/maps/one/${name}`, {
+async function getObj(user: User, name: string): Promise<ObjResponse> {
+    const response = await fetch(`${BASE_URL}/api/objs/one/${name}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json;charset=utf-8'
@@ -134,8 +134,8 @@ async function getMap(user: User, name: string): Promise<MapResponse> {
     return await response.json();
 }
 
-async function deleteMap(user: User, name: string): Promise<Response> {
-    const response = await fetch(`${BASE_URL}/api/maps/one/${name}`, {
+async function deleteObj(user: User, name: string): Promise<Response> {
+    const response = await fetch(`${BASE_URL}/api/objs/one/${name}`, {
         method: 'DELETE',
         headers: {
             'Content-Type': 'application/json;charset=utf-8'
@@ -151,8 +151,8 @@ export const api = {
     createGame,
     hostedGames,
     joinedGames,
-    createMap,
-    getAllMaps,
-    getMap,
-    deleteMap,
+    createObj,
+    getAllObjs,
+    getObj,
+    deleteObj,
 };

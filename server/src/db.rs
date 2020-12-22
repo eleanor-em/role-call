@@ -15,7 +15,7 @@ pub struct Game {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Map {
+pub struct Object {
     id: i32,
     name: String,
 }
@@ -216,7 +216,7 @@ impl DbManager {
             ),
             self.client.execute(
                 "
-                CREATE TABLE IF NOT EXISTS maps(
+                CREATE TABLE IF NOT EXISTS objects(
                     id      serial PRIMARY KEY,
                     owner   integer NOT NULL,
                     name    text NOT NULL,
@@ -485,7 +485,7 @@ impl DbManager {
             .collect())
     }
 
-    pub async fn create_map(
+    pub async fn create_obj(
         &self,
         user_token: &str,
         name: &str,
@@ -493,7 +493,7 @@ impl DbManager {
     ) -> Result<(), DbError> {
         let (user_id, username) = self.get_account(user_token).await?;
         let statement = "
-            INSERT INTO maps (owner, name, path)
+            INSERT INTO objects (owner, name, path)
             VALUES ($1, $2, $3);";
 
         // TODO: Convert data to png
@@ -505,7 +505,7 @@ impl DbManager {
         {
             Ok(_) => {
                 info!(
-                    "added map \"{}\" to user #{} ({}) at {}",
+                    "added object \"{}\" to user #{} ({}) at {}",
                     name, user_id, username, path
                 );
                 Ok(())
@@ -517,27 +517,27 @@ impl DbManager {
         }
     }
 
-    pub async fn get_all_maps(&self, user_token: &str) -> Result<Vec<Map>, DbError> {
+    pub async fn get_all_objs(&self, user_token: &str) -> Result<Vec<Object>, DbError> {
         let (user_id, _) = self.get_account(user_token).await?;
         let statement = "
             SELECT id, name
-            FROM maps
+            FROM objects
             WHERE owner=$1;";
         let rows = self.client.query(statement, &[&user_id]).await?;
         Ok(rows
             .into_iter()
-            .map(|row| Map {
+            .map(|row| Object {
                 id: row.get(0),
                 name: row.get(1),
             })
             .collect())
     }
 
-    pub async fn get_map(&self, user_token: &str, name: &str) -> Result<String, DbError> {
+    pub async fn get_obj(&self, user_token: &str, name: &str) -> Result<String, DbError> {
         let (user_id, _) = self.get_account(user_token).await?;
         let statement = "
             SELECT path
-            FROM maps
+            FROM objects
             WHERE owner=$1 AND name=$2;";
         let rows = self.client.query(statement, &[&user_id, &name]).await?;
         if rows.len() > 0 {
@@ -548,27 +548,27 @@ impl DbManager {
         }
     }
 
-    pub async fn delete_map(&self, user_token: &str, name: &str) -> Result<(), DbError> {
+    pub async fn delete_obj(&self, user_token: &str, name: &str) -> Result<(), DbError> {
         let (user_id, username) = self.get_account(user_token).await?;
 
         // Look up file name first
         let statement = "
             SELECT path
-            FROM maps
+            FROM objects
             WHERE owner=$1 AND name=$2;";
 
         let rows = self.client.query(statement, &[&user_id, &name]).await?;
         if rows.len() > 0 {
-            let path = rows.get(0).ok_or(DbError::Auth)?.get(0);
+            let path: String = rows.get(0).ok_or(DbError::Auth)?.get(0);
 
             // Attempt to delete from database
             let statement = "
-                DELETE FROM maps
+                DELETE FROM objects
                 WHERE owner=$1 AND name=$2;";
             let rows = self.client.query(statement, &[&user_id, &name]).await?;
             if rows.len() > 0 {
                 info!(
-                    "deleted map \"{}\" from user #{} ({})",
+                    "deleted object \"{}\" from user #{} ({})",
                     name, user_id, username
                 );
 
@@ -694,15 +694,5 @@ mod tests {
         };
         assert_eq!(joined.len(), 1);
         assert!(joined.contains(&game));
-
-        // let map_data = vec![0xde, 0xad, 0xbe, 0xef];
-        //
-        // // Create a map
-        // db.create_map(&host_token, "foobar", &map_data)
-        //     .await
-        //     .unwrap();
-        //
-        // let map = db.get_map(&host_token, "foobar").await.unwrap();
-        // assert_eq!(map, map_data);
     }
 }

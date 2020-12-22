@@ -1,9 +1,25 @@
 import * as React from 'react';
-import {useEffect, useState} from 'react';
+import {useEffect, useLayoutEffect, useState} from 'react';
 import '../../css/App.css';
 import {Comms} from './CommsComponent';
 import {ArrowKey, drawToken, HighlightType, TokenManager, TokenType} from './TokenManager';
 import {StoredPlayer} from "./GameLanding";
+import {GameObj} from "../../models/GameObj";
+import {drawObject} from "./ObjManager";
+
+function useWindowSize() {
+    const [size, setSize] = useState([0, 0]);
+    useLayoutEffect(() => {
+        function updateSize() {
+            setSize([window.innerWidth, window.innerHeight]);
+        }
+
+        window.addEventListener('resize', updateSize);
+        updateSize();
+        return () => window.removeEventListener('resize', updateSize);
+    }, []);
+    return size;
+}
 
 export interface Point {
     x: number,
@@ -15,6 +31,7 @@ export interface GameStageProps {
     tokenColour: string,
     tokenType: TokenType,
     setTokenType(type: TokenType): void,
+    selectedObj: GameObj,
     players: StoredPlayer[],
 }
 
@@ -121,6 +138,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     const [dragGrid, setDragGrid] = useState(false);
     const [scale, setScale] = useState(1);
     const [translation, setTranslation] = useState({ x: 0, y: 0 });
+    const [winWidth, winHeight] = useWindowSize();
 
     const [modifiers, setModifiers] = useState({
         ctrl: false,
@@ -140,6 +158,9 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         renderer.width = window.innerWidth * 4 / 5;
         renderer.height = window.innerHeight * 0.96;
     }, [window.innerWidth, window.innerHeight]);
+
+    // Re-render when the window size changes
+    useEffect(forceRender, [winWidth, winHeight]);
 
     // Update the token manager every time we get a new player list
     tokenManager.players = props.players;
@@ -161,7 +182,11 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     function renderPreview(ctx: CanvasRenderingContext2D, cellSize: number): void {
         const { x, y } = renderer.snapToGrid(renderer.transform(mouseCoord));
         if (!modifiers.shift && !modifiers.ctrl) {
-            drawToken(ctx, typeToPlace, x, y, cellSize, props.tokenColour, HighlightType.Select);
+            if (typeToPlace != TokenType.None) {
+                drawToken(ctx, typeToPlace, x, y, cellSize, props.tokenColour, HighlightType.Select);
+            } else if (props.selectedObj != null) {
+                drawObject(ctx, x, y, cellSize);
+            }
         }
     }
     renderer?.addRenderListener('SelectedPreview', renderPreview, -1);

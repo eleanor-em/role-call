@@ -3,26 +3,35 @@ import { useState } from 'react';
 import { TokenControls } from './TokenControls';
 import {TokenType} from "./TokenManager";
 import {Comms} from "./CommsComponent";
-import {MapControls} from "./MapControls";
+import {ObjControls} from "./ObjControls";
+import {GameObj} from "../../models/GameObj";
 
 export interface ControlsProps {
     setTokenColour(col: string): void,
     setTokenType(type: TokenType): void,
+    setObject(obj: GameObj): void,
     comms: Comms,
+    selectedObjName: string,
 }
 
+enum MenuItem {
+    Tokens = 'Tokens',
+    Objects = 'Objects',
+    Tiles = 'Tiles',
+}
+
+const menuItems = [MenuItem.Tokens, MenuItem.Objects, MenuItem.Tiles];
+
 export function Controls(props: ControlsProps): React.ReactElement {
-    const [tab, setTab] = useState(0);
-    const headings = ['Maps', 'Tokens', 'Props'];
+    const [tab, setTab] = useState(MenuItem.Tokens);
 
     function getContents(): React.ReactElement {
-        switch (headings[tab]) {
-            case 'Maps':
-                return (<MapControls comms={props.comms} />);
-            case 'Tokens':
+        switch (tab) {
+            case MenuItem.Tokens:
                 return (<TokenControls setTokenColour={props.setTokenColour} setTokenType={props.setTokenType} />);
-            case 'Props':
-                break;
+
+            case MenuItem.Objects:
+                return (<ObjControls selectedObj={props.selectedObjName} setObject={props.setObject} comms={props.comms} />);
         }
         return (<span>Quis custodiet ipsos custodes?</span>);
     }
@@ -32,14 +41,13 @@ export function Controls(props: ControlsProps): React.ReactElement {
     return (
         <div className="GameMenu">
             <div className="TabContainer">
-                {Object.keys(headings).map(i => {
-                    const idx = parseInt(i);
+                {menuItems.map(item => {
                     return (
                         <span
-                            key={i}
-                            className={tab == idx ? 'SelectedTab' : 'UnselectedTab'}
-                            onClick={() => setTab(idx)}>
-                            {headings[idx]}
+                            key={item}
+                            className={tab === item ? 'SelectedTab' : 'UnselectedTab'}
+                            onClick={() => setTab(item)}>
+                            {item}
                         </span>
                     );
                 })}

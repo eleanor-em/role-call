@@ -173,7 +173,7 @@ mod tests {
 
         let mut req_map = HashMap::new();
         req_map.insert("token", host_token.clone());
-        let res: rolecall::web::MapResponse = client
+        let res: rolecall::web::ObjResponse = client
             .post("http://localhost:8000/api/maps/one/foobar")
             .json(&req_map)
             .send()

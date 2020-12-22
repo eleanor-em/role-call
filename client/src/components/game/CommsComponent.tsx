@@ -172,7 +172,6 @@ export interface CommsProps {
     onDisconnect(): void,
 }
 
-// TODO: refactor
 export function CommsComponent(props: CommsProps): Comms {
     return new Comms(new W3cWebSocket(process.env.RC_WEBSOCKET_URL), props);
 }
