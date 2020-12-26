@@ -32,6 +32,7 @@ export interface GameStageProps {
     tokenType: TokenType,
 
     setTokenType(type: TokenType): void,
+    setObject(obj: GameObj): void,
 
     selectedObj: GameObj,
     players: StoredPlayer[],
@@ -219,6 +220,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         const coord = {x: mx, y: my};
         setMouseCoord(coord);
         tokenManager?.setMouseCoord(coord);
+        objManager?.setMouseCoord(coord);
 
         const {x, y} = renderer.snapToGrid(coord);
         if (x != mouseGridCoord.x || y != mouseGridCoord.y) {
@@ -267,6 +269,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             onPlaceObj(mouse);
         } else {
             tokenManager?.onClick();
+            objManager?.onClick();
         }
         forceRender();
     }
@@ -281,6 +284,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     function onPlaceObj(mouse: Point): void {
         const {x, y} = renderer.transform(mouse);
         props.comms?.placeObj(props.selectedObj.id, x, y);
+        props.setObject(null);
     }
 
     function onZoomIn(mouse: Point, scaleFactor: number): void {
@@ -362,12 +366,14 @@ export function GameStage(props: GameStageProps): React.ReactElement {
                 break;
             case 'Delete':
                 tokenManager?.onDelete();
+                objManager?.onDelete();
                 forceRender();
                 break;
             case 'Escape':
                 prevTypeToPlace = TokenType.None;
                 typeToPlace = TokenType.None;
                 tokenManager?.onEscKey();
+                objManager?.onEscKey();
                 forceRender();
                 break;
             case 'ArrowLeft':
@@ -440,7 +446,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
             } else if (mods.ctrl) {
                 startHideToken();
                 setCursor('zoom-in');
-            } else if (tokenManager?.hoveredToken) {
+            } else if (tokenManager?.hoveredToken || objManager?.hoveredObj) {
                 setCursor('pointer');
             } else {
                 setCursor('default');

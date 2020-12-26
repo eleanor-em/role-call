@@ -110,7 +110,7 @@ export const GameLanding = function (props: GameLandingProps): React.ReactElemen
         <div style={{display: 'flex', flex: 1}}>
             <div className="GameContainer">
                 <GameStage comms={comms} players={players} tokenColour={tokenColour} tokenType={tokenType}
-                           setTokenType={setTokenType} selectedObj={selectedObj}/>
+                           setTokenType={setTokenType} setObject={setObject} selectedObj={selectedObj}/>
             </div>
             <div className="GameSidebar">
                 <div className="GameGreeting">

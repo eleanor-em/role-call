@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { w3cwebsocket as W3cWebSocket } from 'websocket';
-import { useEffect } from 'react';
 import { User } from '../../models/User';
 import { TokenType, Token } from './TokenManager';
 import {Point} from "./GameStage";
@@ -194,15 +193,18 @@ export class Comms {
         this.failedListeners[ref] = listener;
     }
 
-    // TODO: caching for below
     async loadObjs(setObjs: (objs: GameObj[]) => void): Promise<void> {
-        const allObjs = this.isHost
-            ? await api.getOwnedObjs(this.user)
-            : await api.getOtherObjs(this.user, this.hostId);
-        if (allObjs.status) {
-            setObjs(allObjs.objs);
+        if (this.hostId >= 0) {
+            const allObjs = this.isHost
+                ? await api.getOwnedObjs(this.user)
+                : await api.getOtherObjs(this.user, this.hostId);
+            if (allObjs.status) {
+                setObjs(allObjs.objs);
+            } else {
+                console.error('failed to get object list', allObjs);
+            }
         } else {
-            console.error('failed to get object list');
+            setObjs([]);
         }
     }
 
