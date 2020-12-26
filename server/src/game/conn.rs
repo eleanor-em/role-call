@@ -177,6 +177,7 @@ impl Hash for GameConnection {
 }
 
 pub async fn ws_listen(db: Arc<DbManager>, addr: &str) -> Result<(), GameError> {
+    // info!("Websocket server starting up...");
     let mut listener = TcpListener::bind(addr).await?;
     info!("Listening at: {}", addr);
     while let Ok((stream, _)) = listener.accept().await {

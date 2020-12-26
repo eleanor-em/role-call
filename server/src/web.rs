@@ -16,6 +16,7 @@ use crate::config::CONFIG;
 use crate::db::{DbError, DbManager, Game, Object};
 
 // use futures::task::Context;
+use rocket::data::ToByteUnit;
 use rocket_cors::CorsOptions;
 use std::fs::File;
 use std::io::Write;
@@ -35,7 +36,7 @@ impl Api {
         Ok(Self { db, index, game })
     }
 
-    pub fn start(self) {
+    pub async fn start(self) -> Result<(), DbError> {
         rocket::ignite()
             .attach(CorsOptions::default().to_cors().unwrap())
             .mount(
@@ -68,7 +69,9 @@ impl Api {
                 StaticFiles::from("../client/node_modules/react-dom/umd/"),
             )
             .manage(self)
-            .launch();
+            .launch()
+            .await?;
+        Ok(())
     }
 }
 
@@ -134,12 +137,11 @@ pub struct ListObjsResponse {
 }
 
 #[post("/api/users", format = "json", data = "<user>")]
-fn new_user(state: State<'_, Api>, user: Json<UserCreateRequest>) -> Json<UserResponse> {
-    let result = executor::block_on(state.db.create_user(
-        &user.email,
-        &user.password,
-        &user.nickname,
-    ));
+async fn new_user(state: State<'_, Api>, user: Json<UserCreateRequest>) -> Json<UserResponse> {
+    let result = state
+        .db
+        .create_user(&user.email, &user.password, &user.nickname)
+        .await;
 
     match result {
         Ok(_) => Json(UserResponse {
@@ -158,8 +160,8 @@ fn new_user(state: State<'_, Api>, user: Json<UserCreateRequest>) -> Json<UserRe
 }
 
 #[post("/api/users/check", format = "json", data = "<user>")]
-fn check_user(state: State<'_, Api>, user: Json<Request>) -> Json<Response> {
-    let result = executor::block_on(state.db.check_token(&user.token));
+async fn check_user(state: State<'_, Api>, user: Json<Request>) -> Json<Response> {
+    let result = state.db.check_token(&user.token).await;
     match result {
         Ok(true) => Json(Response {
             status: true,
@@ -177,8 +179,8 @@ fn check_user(state: State<'_, Api>, user: Json<Request>) -> Json<Response> {
 }
 
 #[post("/api/users/auth", format = "json", data = "<user>")]
-fn auth_user(state: State<'_, Api>, user: Json<UserAuthRequest>) -> Json<UserResponse> {
-    let result = executor::block_on(state.db.auth_user(&user.email, &user.password));
+async fn auth_user(state: State<'_, Api>, user: Json<UserAuthRequest>) -> Json<UserResponse> {
+    let result = state.db.auth_user(&user.email, &user.password).await;
 
     match result {
         Ok((token, username)) => Json(UserResponse {
@@ -206,8 +208,8 @@ fn auth_user(state: State<'_, Api>, user: Json<UserAuthRequest>) -> Json<UserRes
 }
 
 #[post("/api/games", format = "json", data = "<game>")]
-fn new_game(state: State<'_, Api>, game: Json<GameCreateRequest>) -> Json<GameResponse> {
-    let result = executor::block_on(state.db.create_game(&game.user_token, &game.name));
+async fn new_game(state: State<'_, Api>, game: Json<GameCreateRequest>) -> Json<GameResponse> {
+    let result = state.db.create_game(&game.user_token, &game.name).await;
 
     match result {
         Ok(token) => Json(GameResponse {
@@ -235,8 +237,8 @@ fn new_game(state: State<'_, Api>, game: Json<GameCreateRequest>) -> Json<GameRe
 }
 
 #[post("/api/games/hosted", format = "json", data = "<req>")]
-fn hosted_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResponse> {
-    let result = executor::block_on(state.db.get_hosted_games(&req.token));
+async fn hosted_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResponse> {
+    let result = state.db.get_hosted_games(&req.token).await;
 
     match result {
         Ok(games) => Json(ListGamesResponse {
@@ -261,8 +263,8 @@ fn hosted_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResp
 }
 
 #[post("/api/games/joined", format = "json", data = "<req>")]
-fn joined_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResponse> {
-    let result = executor::block_on(state.db.get_joined_games(&req.token));
+async fn joined_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResponse> {
+    let result = state.db.get_joined_games(&req.token).await;
 
     match result {
         Ok(games) => Json(ListGamesResponse {
@@ -287,8 +289,12 @@ fn joined_games(state: State<'_, Api>, req: Json<Request>) -> Json<ListGamesResp
 }
 
 #[post("/api/games/<game_token>/join", format = "json", data = "<req>")]
-fn join_game(state: State<'_, Api>, game_token: String, req: Json<Request>) -> Json<Response> {
-    let result = executor::block_on(state.db.join_game(&req.token, &game_token));
+async fn join_game(
+    state: State<'_, Api>,
+    game_token: String,
+    req: Json<Request>,
+) -> Json<Response> {
+    let result = state.db.join_game(&req.token, &game_token).await;
 
     match result {
         Ok(_) => Json(Response {
@@ -315,7 +321,11 @@ fn write_data(path: &str, data: &Vec<u8>) -> Result<(), Box<dyn Error>> {
 }
 
 #[post("/api/objs/new", data = "<data>")]
-fn create_obj(state: State<'_, Api>, content_type: &ContentType, data: Data) -> Json<Response> {
+async fn create_obj(
+    state: State<'_, Api>,
+    content_type: &ContentType,
+    data: Data,
+) -> Json<Response> {
     // Encoding the object straight as text is a bit awkward, but we're saving it directly to the
     // database, not as a file on the filesystem.
     let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
@@ -324,7 +334,10 @@ fn create_obj(state: State<'_, Api>, content_type: &ContentType, data: Data) -> 
         MultipartFormDataField::text("name"),
     ]);
 
-    let mut multipart_form_data = MultipartFormData::parse(content_type, data, options).unwrap();
+    let mut multipart_form_data =
+        MultipartFormData::parse(content_type, data.open((2 << 22).mebibytes()), options)
+            .await
+            .unwrap();
     let data = multipart_form_data.raw.remove("data");
     let token = multipart_form_data.texts.remove("token");
     let name = multipart_form_data.texts.remove("name");
@@ -371,7 +384,7 @@ fn create_obj(state: State<'_, Api>, content_type: &ContentType, data: Data) -> 
         });
     }
 
-    let result = executor::block_on(state.db.create_obj(&token, &name, &path));
+    let result = state.db.create_obj(&token, &name, &path).await;
 
     match result {
         Ok(_) => Json(Response {
@@ -397,8 +410,8 @@ fn create_obj(state: State<'_, Api>, content_type: &ContentType, data: Data) -> 
 }
 
 #[post("/api/objs/owned", format = "json", data = "<req>")]
-fn get_owned_objs(state: State<'_, Api>, req: Json<Request>) -> Json<ListObjsResponse> {
-    let result = executor::block_on(state.db.get_owned_objs(&req.token));
+async fn get_owned_objs(state: State<'_, Api>, req: Json<Request>) -> Json<ListObjsResponse> {
+    let result = state.db.get_owned_objs(&req.token).await;
 
     match result {
         Ok(data) => Json(ListObjsResponse {
@@ -423,11 +436,15 @@ fn get_owned_objs(state: State<'_, Api>, req: Json<Request>) -> Json<ListObjsRes
 }
 
 #[post("/api/objs/owned/by/<id>", format = "json", data = "<req>")]
-fn get_other_objs(state: State<'_, Api>, id: String, req: Json<Request>) -> Json<ListObjsResponse> {
-    let result = id
-        .parse()
-        .map_err(|_| DbError::Parse)
-        .and_then(|id| executor::block_on(state.db.get_other_objs(&req.token, id)));
+async fn get_other_objs(
+    state: State<'_, Api>,
+    id: String,
+    req: Json<Request>,
+) -> Json<ListObjsResponse> {
+    let result = match id.parse() {
+        Ok(id) => state.db.get_other_objs(&req.token, id).await,
+        Err(_) => Err(DbError::Parse),
+    };
 
     match result {
         Ok(data) => Json(ListObjsResponse {
@@ -452,8 +469,8 @@ fn get_other_objs(state: State<'_, Api>, id: String, req: Json<Request>) -> Json
 }
 
 #[delete("/api/objs/one/<name>", format = "json", data = "<req>")]
-fn delete_obj(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<Response> {
-    let result = executor::block_on(state.db.delete_obj(&req.token, &name));
+async fn delete_obj(state: State<'_, Api>, name: String, req: Json<Request>) -> Json<Response> {
+    let result = state.db.delete_obj(&req.token, &name).await;
 
     match result {
         Ok(_) => Json(Response {
@@ -481,12 +498,12 @@ fn process_html(html: String) -> String {
 }
 
 #[get("/")]
-fn index(state: State<'_, Api>) -> Content<String> {
+async fn index(state: State<'_, Api>) -> Content<String> {
     Content(ContentType::HTML, state.index.clone())
 }
 
 #[get("/games/<game_token>")]
-fn game(state: State<'_, Api>, game_token: String) -> Content<String> {
+async fn game(state: State<'_, Api>, game_token: String) -> Content<String> {
     let game = state.game.clone();
 
     Content(ContentType::HTML, game.replace("GAMETOKEN", &game_token))

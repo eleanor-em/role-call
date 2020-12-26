@@ -40,6 +40,7 @@ pub enum GamePermission {
 
 #[derive(Debug)]
 pub enum DbError {
+    Rocket(rocket::error::Error),
     Sql(tokio_postgres::Error),
     Hash(argonautica::Error),
     Time(std::time::SystemTimeError),
@@ -49,6 +50,12 @@ pub enum DbError {
     AlreadyExists,
     DiskError,
     Parse,
+}
+
+impl From<rocket::error::Error> for DbError {
+    fn from(e: rocket::error::Error) -> Self {
+        Self::Rocket(e)
+    }
 }
 
 impl From<tokio_postgres::Error> for DbError {
