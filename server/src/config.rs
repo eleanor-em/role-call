@@ -1,3 +1,4 @@
+use simple_logger::SimpleLogger;
 use std::env;
 use std::fmt::Write;
 use tokio::time::Duration;
@@ -59,13 +60,15 @@ fn load_config() -> Config {
         RunMode::Release
     };
 
-    simple_logger::init_with_level(
-        env::var("RC_LOG_LEVEL")
-            .ok()
-            .and_then(|level| level.parse().ok())
-            .unwrap_or(log::Level::Info),
-    )
-    .expect("CONFIG: failed to initialise logger");
+    SimpleLogger::new()
+        .with_level(
+            env::var("RC_LOG_LEVEL")
+                .ok()
+                .and_then(|level| level.parse().ok())
+                .unwrap_or(log::LevelFilter::Info),
+        )
+        .init()
+        .expect("CONFIG: failed to initialise logger");
 
     let db_addr = env::var("RC_DB_ADDRESS").unwrap_or("localhost".to_string());
     let db_user = env::var("RC_DB_USER").unwrap_or("postgres".to_string());

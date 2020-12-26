@@ -1,4 +1,3 @@
-use futures::executor;
 use rocket::http::ContentType;
 use rocket::response::Content;
 use rocket::{Data, State};
@@ -334,10 +333,13 @@ async fn create_obj(
         MultipartFormDataField::text("name"),
     ]);
 
-    let mut multipart_form_data =
-        MultipartFormData::parse(content_type, data.open((2 << 22).mebibytes()), options)
-            .await
-            .unwrap();
+    let mut multipart_form_data = MultipartFormData::parse(
+        content_type,
+        data.open(CONFIG.max_upload_mb.mebibytes()),
+        options,
+    )
+    .await
+    .unwrap();
     let data = multipart_form_data.raw.remove("data");
     let token = multipart_form_data.texts.remove("token");
     let name = multipart_form_data.texts.remove("name");
