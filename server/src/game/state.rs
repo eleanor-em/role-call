@@ -47,6 +47,7 @@ impl GameState {
             ProtocolMessage::DeleteToken { token_id } => self.tokens.remove(token_id).is_some(),
             ProtocolMessage::PlaceObj(obj) => {
                 let id = format!("{}", self.placed_obj_count);
+                info!("Received place obj message: id {}", id);
                 obj.id = Some(id.clone());
                 self.placed_obj_count += 1;
                 // controller is automatically the host
@@ -55,6 +56,10 @@ impl GameState {
                 let obj = (*obj).clone();
                 self.placed_objs.insert(id, obj);
                 true
+            }
+            ProtocolMessage::DeleteObj { obj_id } => {
+                info!("Received delete obj message: id {}", obj_id);
+                self.placed_objs.remove(obj_id).is_some()
             }
             ProtocolMessage::SetController {
                 token_id,

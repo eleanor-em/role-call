@@ -2,7 +2,6 @@ import * as React from 'react';
 import {Point, Renderer} from "./GameStage";
 import {StoredPlayer} from "./GameLanding";
 import {Comms} from "./CommsComponent";
-import {GameObj} from "../../models/GameObj";
 import {Anchor, PopupButton} from "./PopupButton";
 
 export interface PlacedObj {
@@ -50,6 +49,7 @@ export class ObjManager {
         this.comms = comms;
         this.mouseCoord = { x: 0, y: 0 };
         this.renderer = renderer;
+        this.forceRender = forceRender;
         this.setForcePointer = setForcePointer;
 
         renderer.addRenderListener('ObjManagerRender', (ctx, _) => {
@@ -97,6 +97,16 @@ export class ObjManager {
             this.objs[msg.id] = msg;
             forceRender();
         });
+
+        comms.addDeleteObjListener('ObjManagerDelete', ({ obj_id }) => {
+            if (this.selectedObj === obj_id.toString()) {
+                this.deleteButton = null;
+                this.selectedObj = null;
+            }
+
+            delete this.objs[obj_id.toString()];
+            this.forceRender();
+        });
     }
 
     setMouseCoord(rawMouseCoord: Point): void {
@@ -105,6 +115,7 @@ export class ObjManager {
     }
 
     onClick(): void {
+        console.log('selected id: ' + this.selectedObj);
         if (this.deleteButton?.onClick()) {
             return;
         }
@@ -120,7 +131,12 @@ export class ObjManager {
     }
 
     onDelete(): void {
-        // TODO
+        if (this.selectedObj) {
+            if (confirm('Delete this object?')) {
+                console.log('delete id: ' + this.selectedObj);
+                this.comms.deleteObj(this.selectedObj);
+            }
+        }
     }
 
     onEscKey(): void {

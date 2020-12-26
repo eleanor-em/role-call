@@ -146,7 +146,8 @@ impl Server {
             ProtocolMessage::PlaceToken(_)
             | ProtocolMessage::DeleteToken { .. }
             | ProtocolMessage::SetController { .. }
-            | ProtocolMessage::PlaceObj(_) => user.is_host,
+            | ProtocolMessage::PlaceObj(_)
+            | ProtocolMessage::DeleteObj { .. } => user.is_host,
             ProtocolMessage::Movement { token_id, .. } => {
                 user.is_host || {
                     let state = self.state.lock().unwrap();

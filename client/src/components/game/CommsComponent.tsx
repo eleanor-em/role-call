@@ -22,6 +22,10 @@ export interface MoveTokenMessage {
 
 export type PlaceObjMessage = PlacedObj;
 
+export interface DeleteObjMessage {
+    obj_id: number,
+}
+
 export interface SetControllerMessage {
     token_id: string,
     new_controller: string,
@@ -55,6 +59,7 @@ export class Comms {
     setControllerListeners: Record<string, (msg: SetControllerMessage) => void> = {};
 
     placeObjListeners: Record<string, (msg: PlaceObjMessage) => void> = {};
+    deleteObjListeners: Record<string, (msg: DeleteObjMessage) => void> = {};
 
     connectListeners: Record<string, (msg: ConnectMessage) => void> = {};
     disconnectListeners: Record<string, (msg: DisconnectMessage) => void> = {};
@@ -103,6 +108,10 @@ export class Comms {
                 }
                 case 'PlaceObj': {
                     Object.values(this.placeObjListeners).forEach(op => op(data));
+                    break;
+                }
+                case 'DeleteObj': {
+                    Object.values(this.deleteObjListeners).forEach(op => op(data));
                     break;
                 }
                 case 'SetController': {
@@ -154,6 +163,12 @@ export class Comms {
         }));
     }
 
+    deleteObj(obj_id: string): void {
+        this.socket.send(JSON.stringify({
+            DeleteObj: { obj_id }
+        }));
+    }
+
     setController(token_id: string, new_controller: string): void {
         this.socket.send(JSON.stringify({
             SetController: { token_id, new_controller }
@@ -171,6 +186,10 @@ export class Comms {
 
     addPlaceObjListener(ref: string, listener: ((msg: PlaceObjMessage) => void)): void {
         this.placeObjListeners[ref] = listener;
+    }
+
+    addDeleteObjListener(ref: string, listener: ((msg: DeleteObjMessage) => void)): void {
+        this.deleteObjListeners[ref] = listener;
     }
 
     addMoveTokenListener(ref: string, listener: ((msg: MoveTokenMessage) => void)): void {

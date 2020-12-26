@@ -13,6 +13,9 @@ pub enum ProtocolMessage {
         dy: i16,
     },
     PlaceObj(PlacedObj),
+    DeleteObj {
+        obj_id: String,
+    },
     SetController {
         token_id: String,
         new_controller: String,
