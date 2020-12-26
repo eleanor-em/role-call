@@ -50,8 +50,6 @@ impl GameState {
                 info!("Received place obj message: id {}", id);
                 obj.id = Some(id.clone());
                 self.placed_obj_count += 1;
-                // controller is automatically the host
-                obj.controller = Some(self.host.username.clone());
 
                 let obj = (*obj).clone();
                 self.placed_objs.insert(id, obj);

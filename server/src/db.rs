@@ -162,7 +162,7 @@ impl DbManager {
             .execute(
                 "
             DROP TABLE IF EXISTS
-            user_accounts, identities, unconfirmed_identities, games, user_games, maps
+            user_accounts, identities, unconfirmed_identities, games, user_games, objects
             CASCADE;",
                 &[],
             )

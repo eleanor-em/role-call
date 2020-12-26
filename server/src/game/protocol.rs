@@ -72,7 +72,8 @@ pub struct PlacedObj {
     pub obj_id: i32,
     pub x: i16,
     pub y: i16,
-    pub controller: Option<String>,
+    pub width: i16,
+    pub height: i16,
 }
 
 impl PlacedObj {

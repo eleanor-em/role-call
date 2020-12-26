@@ -157,9 +157,9 @@ export class Comms {
         }));
     }
 
-    placeObj(obj_id: number, x: number, y: number) {
+    placeObj(obj_id: number, x: number, y: number, width: number, height: number) {
         this.socket.send(JSON.stringify({
-            PlaceObj: { obj_id, x, y }
+            PlaceObj: { obj_id, x, y, width, height }
         }));
     }
 
@@ -251,7 +251,7 @@ export class Comms {
 
         // look for a hidden element
         const obj = this.allObjs[obj_id];
-        let elem = document.getElementById(`hidden-object-${obj_id}`);
+        let elem = document.getElementById(`hidden-object-${obj_id}`) as HTMLImageElement;
         if (!elem) {
             const img = document.createElement('img');
             img.id = `hidden-object-${obj_id}`;
@@ -261,6 +261,9 @@ export class Comms {
             document.querySelector('body').appendChild(img);
             elem = img;
         }
+
+        this.allObjs[obj_id].width = elem.width;
+        this.allObjs[obj_id].height = elem.height;
 
         return elem as HTMLImageElement;
     }

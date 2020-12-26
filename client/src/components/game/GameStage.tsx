@@ -283,7 +283,8 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function onPlaceObj(mouse: Point): void {
         const {x, y} = renderer.transform(mouse);
-        props.comms?.placeObj(props.selectedObj.id, x, y);
+        const elem = props.comms.getObjectImageElem(props.selectedObj.id);
+        props.comms?.placeObj(props.selectedObj.id, x, y, elem.width, elem.height);
         props.setObject(null);
     }
 
@@ -326,6 +327,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function handleMouseUp(_: any): void {
         setDragGrid(false);
+        objManager?.onMouseUp();
     }
 
     function handleMouseLeave(_: any): void {
