@@ -274,7 +274,7 @@ export class ObjManager {
             nh = nh < 16 / aspect ? 16 / aspect : nh;
 
             // Snap to grid
-            const snapTolerance = 12;
+            const snapTolerance = 8;
 
             let snapX = Math.round(nx / this.renderer.cellSize) * this.renderer.cellSize;
 
@@ -382,6 +382,9 @@ export class ObjManager {
     }
 
     onMouseUp(): void {
+        if (this.selectedObj) {
+            this.comms.moveObj(this.objs[this.selectedObj]);
+        }
         this.draggingDir = null;
         this.dragOrigin = null;
     }

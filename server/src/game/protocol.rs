@@ -14,7 +14,14 @@ pub enum ProtocolMessage {
     },
     PlaceObj(PlacedObj),
     DeleteObj {
-        obj_id: String,
+        id: String,
+    },
+    MoveObj {
+        id: String,
+        x: i16,
+        y: i16,
+        w: i16,
+        h: i16,
     },
     SetController {
         token_id: String,

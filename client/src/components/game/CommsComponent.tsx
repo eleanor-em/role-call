@@ -163,10 +163,22 @@ export class Comms {
         }));
     }
 
-    deleteObj(obj_id: string): void {
+    deleteObj(id: string): void {
         this.socket.send(JSON.stringify({
-            DeleteObj: { obj_id }
+            DeleteObj: { id }
         }));
+    }
+
+    moveObj(obj: PlacedObj): void {
+        this.socket.send(JSON.stringify({
+            MoveObj: {
+                id: obj.id,
+                x: obj.x,
+                y: obj.y,
+                w: obj.width,
+                h: obj.height,
+            }
+        }))
     }
 
     setController(token_id: string, new_controller: string): void {
