@@ -136,6 +136,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     const [hideToken, setHideToken] = useState(false);
     const [cursor, setCursor] = useState('default');
     const [forcePointer, setForcePointer] = useState(false);
+    const [forceCursor, setForceCursor] = useState('');
 
     const [mouseCoord, setMouseCoord] = useState({x: 0, y: 0});
     // grid coord is used to hook updates since we don't need to update if we haven't moved to a new cell
@@ -158,7 +159,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         renderer = new Renderer();
     }
     if (!loaded && props.comms != null) {
-        objManager = new ObjManager(props.comms, renderer, forceRender, setForcePointer);
+        objManager = new ObjManager(props.comms, renderer, forceRender, setForceCursor);
         tokenManager = new TokenManager(props.comms, renderer, forceRender, setForcePointer);
         loaded = true;
     }
@@ -284,7 +285,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     function onPlaceObj(mouse: Point): void {
         const {x, y} = renderer.transform(mouse);
         const elem = props.comms.getObjectImageElem(props.selectedObj.id);
-        props.comms?.placeObj(props.selectedObj.id, x, y, elem.width, elem.height);
+        props.comms?.placeObj(props.selectedObj.id, x - elem.width / 2, y - elem.height / 2, elem.width, elem.height);
         props.setObject(null);
     }
 
@@ -469,7 +470,10 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         renderer.render(translation, scale);
     }, [translation, mouseGridCoord, scale, modifiers, forceRenderFlag]);
 
-    const finalCursor = forcePointer ? 'pointer' : cursor;
+    let finalCursor = forcePointer ? 'pointer' : cursor;
+    if (forceCursor.length > 0) {
+        finalCursor = forceCursor;
+    }
 
     return (
         <>
