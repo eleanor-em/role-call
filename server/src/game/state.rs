@@ -55,12 +55,12 @@ impl GameState {
                 self.placed_objs.insert(id, obj);
                 true
             }
-            ProtocolMessage::DeleteObj { id } => {
-                info!("Received delete obj message: id {}", id);
-                self.placed_objs.remove(id).is_some()
+            ProtocolMessage::DeleteObj { obj_id } => {
+                info!("Received delete obj message: id {}", obj_id);
+                self.placed_objs.remove(obj_id).is_some()
             }
-            ProtocolMessage::MoveObj { id, x, y, w, h } => {
-                if let Some(obj) = self.placed_objs.get_mut(id) {
+            ProtocolMessage::MoveObj { obj_id, x, y, w, h } => {
+                if let Some(obj) = self.placed_objs.get_mut(obj_id) {
                     obj.x = *x;
                     obj.y = *y;
                     obj.width = *w;

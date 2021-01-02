@@ -62,6 +62,7 @@ enum DragDirection {
     Bottom,
     BottomLeft,
     Left,
+    Move,
 }
 
 function coordsToDragDirection(coords: Point): DragDirection {
@@ -110,6 +111,8 @@ function dragDirToCursor(dir: DragDirection): string {
             return 'sw-resize';
         case DragDirection.Left:
             return 'w-resize';
+        case DragDirection.Move:
+            return 'move';
         default:
             return '';
     }
@@ -180,6 +183,10 @@ export class ObjManager {
                         this.hoveredObjDims = {x: obj.width, y: obj.height};
                         ctx.strokeStyle = '#dddddd';
                         draw = true;
+
+                        if (this.hoveredObj == this.selectedObj) {
+                            // setForceCursor('move');
+                        }
                     }
                     if (this.selectedObj == id) {
                         ctx.strokeStyle = 'white';
@@ -202,14 +209,17 @@ export class ObjManager {
             forceRender();
         });
 
-        comms.addDeleteObjListener('ObjManagerDelete', ({obj_id}) => {
-            if (this.selectedObj === obj_id.toString()) {
-                this.deleteButton = null;
-                this.selectedObj = null;
-            }
+        comms.addDeleteObjListener('ObjManagerDelete', (msg) => {
+            const obj_id = msg?.obj_id;
+            if (obj_id) {
+                if (this.selectedObj === obj_id.toString()) {
+                    this.deleteButton = null;
+                    this.selectedObj = null;
+                }
 
-            delete this.objs[obj_id.toString()];
-            this.forceRender();
+                delete this.objs[obj_id.toString()];
+                this.forceRender();
+            }
         });
     }
 
@@ -226,6 +236,7 @@ export class ObjManager {
             const aspect = w / h;
             let s;
             let preserveAspect = false;
+            let resizing = true;
 
             let nx = x, ny = y, nw = w, nh = h;
             switch (this.draggingDir) {
@@ -267,6 +278,11 @@ export class ObjManager {
                     nx = x - dx;
                     nw = w + dx;
                     break;
+                case DragDirection.Move:
+                    nx = x - dx;
+                    ny = y - dy;
+                    resizing = false;
+                    break;
             }
 
             // Prevent making it too small (would cause memory leaks)
@@ -281,7 +297,9 @@ export class ObjManager {
             if (Math.abs(snapX - nx) < snapTolerance) {
                 const delta = snapX - nx;
                 nx += delta;
-                nw -= delta;
+                if (resizing) {
+                    nw -= delta;
+                }
                 if (preserveAspect) {
                     ny += delta / aspect;
                 }
@@ -290,7 +308,11 @@ export class ObjManager {
             snapX = Math.round((nx + nw) / this.renderer.cellSize) * this.renderer.cellSize;
             if (Math.abs(snapX - (nx + nw)) < snapTolerance) {
                 const delta = snapX - (nx + nw);
-                nw += delta;
+                if (resizing) {
+                    nw += delta;
+                } else {
+                    nx += delta;
+                }
             }
 
             // Only snap in y if we aren't preserving aspect ratio.
@@ -300,13 +322,19 @@ export class ObjManager {
                 if (Math.abs(snapY - ny) < snapTolerance) {
                     const delta = snapY - ny;
                     ny += delta;
-                    nh -= delta;
+                    if (resizing) {
+                        nh -= delta;
+                    }
                 }
 
                 snapY = Math.round((ny + nh) / this.renderer.cellSize) * this.renderer.cellSize;
                 if (Math.abs(snapY - (ny + nh)) < snapTolerance) {
                     const delta = snapY - (ny + nh);
-                    nh += delta;
+                    if (resizing) {
+                        nh += delta;
+                    } else {
+                        ny += delta;
+                    }
                 }
             }
 
@@ -343,6 +371,11 @@ export class ObjManager {
             }
         }
 
+        if (this.mouseCoord.x >= obj.x && this.mouseCoord.x <= obj.x + obj.width
+            && this.mouseCoord.y >= obj.y && this.mouseCoord.y <= obj.y + obj.height) {
+            return DragDirection.Move;
+        }
+
         return null;
     }
 
@@ -351,30 +384,30 @@ export class ObjManager {
             return;
         }
 
-        if (this.selectedObj != null) {
-            this.draggingDir = this.checkHoveringControls();
-            if (this.draggingDir !== null) {
-                const obj = this.objs[this.selectedObj];
-                this.dragOrigin = this.mouseCoord;
-                this.dragObjOriginTopLeft = {x: obj.x, y: obj.y};
-                this.dragObjOriginDims = {x: obj.width, y: obj.height};
-            } else {
-                this.selectedObj = null;
-                this.deleteButton = null;
+        const prevSelected = this.selectedObj;
+
+        if (this.hoveredObj != null) {
+            this.selectedObj = this.hoveredObj;
+
+            if (this.selectedObj != prevSelected) {
+                this.deleteButton = new PopupButton(this.hoveredTopLeft.x - 10, this.hoveredTopLeft.y - 10,
+                    this.renderer.cellSize, Anchor.TopLeft, '\uf014',
+                    force => force ? this.setForceCursor('pointer') : this.setForceCursor(''),
+                    () => this.onDelete());
             }
+        }
+
+        this.draggingDir = this.checkHoveringControls();
+        if (this.draggingDir !== null) {
+            const obj = this.objs[this.selectedObj];
+            this.dragOrigin = this.mouseCoord;
+            this.dragObjOriginTopLeft = {x: obj.x, y: obj.y};
+            this.dragObjOriginDims = {x: obj.width, y: obj.height};
         } else {
-            const prevSelected = this.selectedObj;
+            this.selectedObj = null;
+            this.deleteButton = null;
 
-            if (this.hoveredObj != null) {
-                this.selectedObj = this.hoveredObj;
-
-                if (this.selectedObj != prevSelected) {
-                    this.deleteButton = new PopupButton(this.hoveredTopLeft.x - 10, this.hoveredTopLeft.y - 10,
-                        this.renderer.cellSize, Anchor.TopLeft, '\uf014',
-                        force => force ? this.setForceCursor('pointer') : this.setForceCursor(''),
-                        () => this.onDelete());
-                }
-            } else {
+            if (this.hoveredObj === null) {
                 this.selectedObj = null;
                 this.deleteButton = null;
             }

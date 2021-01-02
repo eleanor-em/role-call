@@ -14,10 +14,10 @@ pub enum ProtocolMessage {
     },
     PlaceObj(PlacedObj),
     DeleteObj {
-        id: String,
+        obj_id: String,
     },
     MoveObj {
-        id: String,
+        obj_id: String,
         x: i16,
         y: i16,
         w: i16,

@@ -158,25 +158,30 @@ export class Comms {
     }
 
     placeObj(obj_id: number, x: number, y: number, width: number, height: number) {
+        x = Math.round(x);
+        y = Math.round(y);
+        width = Math.round(width);
+        height = Math.round(height);
+
         this.socket.send(JSON.stringify({
             PlaceObj: { obj_id, x, y, width, height }
         }));
     }
 
-    deleteObj(id: string): void {
+    deleteObj(obj_id: string): void {
         this.socket.send(JSON.stringify({
-            DeleteObj: { id }
+            DeleteObj: { obj_id }
         }));
     }
 
     moveObj(obj: PlacedObj): void {
         this.socket.send(JSON.stringify({
             MoveObj: {
-                id: obj.id,
-                x: obj.x,
-                y: obj.y,
-                w: obj.width,
-                h: obj.height,
+                obj_id: obj.id,
+                x: Math.round(obj.x),
+                y: Math.round(obj.y),
+                w: Math.round(obj.width),
+                h: Math.round(obj.height),
             }
         }))
     }
