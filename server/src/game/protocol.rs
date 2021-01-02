@@ -6,11 +6,15 @@ pub enum ProtocolMessage {
     DeleteToken {
         token_id: String,
     },
-    Movement {
+    MoveToken {
         id: String,
         token_id: String,
         dx: i16,
         dy: i16,
+    },
+    RenameToken {
+        token_id: String,
+        name: String,
     },
     PlaceObj(PlacedObj),
     DeleteObj {
@@ -60,6 +64,7 @@ impl Into<RawMessage> for ProtocolMessage {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Token {
     pub id: Option<String>,
+    pub name: Option<String>,
     pub kind: String,
     pub x: i16,
     pub y: i16,

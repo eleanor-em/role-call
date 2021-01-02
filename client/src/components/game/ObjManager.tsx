@@ -183,10 +183,6 @@ export class ObjManager {
                         this.hoveredObjDims = {x: obj.width, y: obj.height};
                         ctx.strokeStyle = '#dddddd';
                         draw = true;
-
-                        if (this.hoveredObj == this.selectedObj) {
-                            // setForceCursor('move');
-                        }
                     }
                     if (this.selectedObj == id) {
                         ctx.strokeStyle = 'white';

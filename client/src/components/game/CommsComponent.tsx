@@ -44,10 +44,15 @@ export interface FailedConnectionMessage {
     reason: string,
 }
 
-export interface Movement {
+export interface MoveToken {
     id: string,
     token_id: string,
     delta: Point,
+}
+
+export interface RenameToken {
+    token_id: string,
+    name: string,
 }
 
 export class Comms {
@@ -102,7 +107,7 @@ export class Comms {
                     Object.values(this.deleteTokenListeners).forEach(op => op(data));
                     break;
                 }
-                case 'Movement': {
+                case 'MoveToken': {
                     Object.values(this.moveTokenListeners).forEach(op => op(data));
                     break;
                 }
@@ -147,7 +152,7 @@ export class Comms {
 
     moveToken(id: string, token_id: string, dx: number, dy: number): void {
         this.socket.send(JSON.stringify({
-            Movement: { id, token_id, dx, dy }
+            MoveToken: { id, token_id, dx, dy }
         }));
     }
 

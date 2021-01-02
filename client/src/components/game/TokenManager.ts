@@ -46,7 +46,7 @@ export function drawToken(ctx: CanvasRenderingContext2D,
             ctx.beginPath();
             ctx.arc(x + cellSize / 2, y + cellSize / 2, radius, 0, Math.PI * 2);
             ctx.closePath();
-            
+
             ctx.fill();
             ctx.stroke();
             break;
@@ -62,7 +62,7 @@ export function drawToken(ctx: CanvasRenderingContext2D,
             ctx.fill();
             ctx.stroke();
             break;
-        
+
         case TokenType.Triangle:
             ctx.beginPath();
             ctx.moveTo(x + cellSize / 2, y + padding);
@@ -73,7 +73,7 @@ export function drawToken(ctx: CanvasRenderingContext2D,
             ctx.fill();
             ctx.stroke();
             break;
-        
+
         case TokenType.Diamond:
             ctx.beginPath();
             ctx.moveTo(x + padding, y + cellSize / 2);
@@ -97,6 +97,7 @@ export enum ArrowKey {
 
 export interface Token {
     id?: string,
+    name?: string,
     kind: TokenType,
     x: number,
     y: number,
@@ -234,13 +235,40 @@ export class TokenManager {
                     const cx = tx + this.renderer.cellSize / 2;
                     const cy = ty + this.renderer.cellSize / 2;
                     const r0 = Math.round(this.renderer.cellSize * 0.3);
-                    const r1 = Math.round(this.renderer.cellSize * 0.6);
+                    const r1 = Math.round(this.renderer.cellSize * 0.5);
 
                     let grd = ctx.createRadialGradient(cx, cy, r0, cx, cy, r1);
                     grd.addColorStop(0, 'white');
                     grd.addColorStop(1, '#00000000');
                     ctx.fillStyle = grd;
-                    ctx.fillRect(tx - this.renderer.cellSize, ty - this.renderer.cellSize, tx + this.renderer.cellSize, ty + this.renderer.cellSize);
+                    ctx.fillRect(tx - this.renderer.cellSize, ty - this.renderer.cellSize,
+                        tx + this.renderer.cellSize, ty + this.renderer.cellSize);
+                }
+
+                // draw name if it exists
+                if (token.name) {
+                    ctx.font = "bold 22pt 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif";
+                    ctx.textAlign = 'center';
+
+                    // Name plate
+                    const metrics = ctx.measureText(token.name);
+                    ctx.fillStyle = '#00000099';
+                    const padding = 8;
+
+                    const nameX = tx + this.renderer.cellSize / 2;
+                    const nameY = ty - 2;
+
+                    const left = nameX - metrics.actualBoundingBoxLeft - padding;
+                    const width = metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight + 2 * padding;
+                    const top = nameY - metrics.actualBoundingBoxAscent - padding;
+                    const height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent + 2 * padding;
+                    ctx.fillRect(left, top, width, height);
+
+                    ctx.fillStyle = '#ffffffff';
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 1;
+                    ctx.fillText(token.name, nameX, nameY);
+                    ctx.strokeText(token.name, nameX, nameY);
                 }
 
                 drawToken(ctx, token.kind, tx, ty, this.renderer.cellSize, token.colour, highlight);
@@ -262,11 +290,11 @@ export class TokenManager {
             this.optionButton = null;
         } else {
             this.deleteButton = new PopupButton(this.selectedToken.x, this.selectedToken.y,
-                this.renderer.cellSize, Anchor.TopLeft, '\uf014', this.setForcePointer,
+                this.renderer.cellSize, Anchor.BottomLeft, '\uf014', this.setForcePointer,
                 () => this.onDelete());
 
             this.optionButton = new PopupButton(this.selectedToken.x, this.selectedToken.y,
-                this.renderer.cellSize, Anchor.TopRight, '\uf013', this.setForcePointer,
+                this.renderer.cellSize, Anchor.BottomRight, '\uf013', this.setForcePointer,
                 () => this.onShowOptions());
         }
     }
@@ -390,10 +418,10 @@ class Options {
 
     updatePosition(cellX: number, cellY: number, cellSize: number) {
         const xOffset = 30;
-        const yOffset = 12;
+        const yOffset = 32;
 
         this.x = cellX + cellSize + xOffset;
-        this.y = cellY + yOffset;
+        this.y = cellY + yOffset + cellSize;
     }
 
     calculateSizes(ctx: CanvasRenderingContext2D) {

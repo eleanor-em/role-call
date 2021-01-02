@@ -149,10 +149,11 @@ impl Server {
             | ProtocolMessage::PlaceObj(_)
             | ProtocolMessage::DeleteObj { .. }
             | ProtocolMessage::MoveObj { .. } => user.is_host,
-            ProtocolMessage::Movement { token_id, .. } => {
+            ProtocolMessage::MoveToken { token_id, .. }
+            | ProtocolMessage::RenameToken { token_id, .. } => {
                 user.is_host || {
                     let state = self.state.lock().unwrap();
-                    Some(user.username) == state.get_owner(token_id)
+                    Some(user.username) == state.get_owner(token_id) || user.is_host
                 }
             }
             ProtocolMessage::Connect { .. }

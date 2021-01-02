@@ -28,6 +28,7 @@ impl GameState {
             ProtocolMessage::PlaceToken(token) => {
                 let token_id = format!("{}", self.token_count);
                 token.id = Some(token_id.clone());
+                token.name = Some("Foo".to_string());
                 self.token_count += 1;
                 // controller is automatically the host
                 token.controller = Some(self.host.username.clone());
@@ -81,7 +82,7 @@ impl GameState {
                     false
                 }
             }
-            ProtocolMessage::Movement {
+            ProtocolMessage::MoveToken {
                 token_id, dx, dy, ..
             } => {
                 if let Some(token) = self.tokens.get_mut(token_id) {

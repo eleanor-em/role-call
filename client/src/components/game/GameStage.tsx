@@ -104,7 +104,7 @@ export class Renderer {
         const y0 = Math.ceil(Math.abs(transY / scale / this.cellSize)) * this.cellSize;
 
         ctx.lineWidth = 1;
-        ctx.strokeStyle = 'white';
+        ctx.strokeStyle = '#777777';
 
         ctx.beginPath();
         // vertical lines
