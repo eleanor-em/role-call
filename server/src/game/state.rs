@@ -28,7 +28,6 @@ impl GameState {
             ProtocolMessage::PlaceToken(token) => {
                 let token_id = format!("{}", self.token_count);
                 token.id = Some(token_id.clone());
-                token.name = Some("Foo".to_string());
                 self.token_count += 1;
                 // controller is automatically the host
                 token.controller = Some(self.host.username.clone());
@@ -45,7 +44,37 @@ impl GameState {
                     false
                 }
             }
+            ProtocolMessage::MoveToken {
+                token_id, dx, dy, ..
+            } => {
+                if let Some(token) = self.tokens.get_mut(token_id) {
+                    token.x += *dx;
+                    token.y += *dy;
+                    true
+                } else {
+                    false
+                }
+            }
+            ProtocolMessage::SetController {
+                token_id,
+                new_controller,
+            } => {
+                if let Some(token) = self.tokens.get_mut(token_id) {
+                    token.controller = Some(new_controller.clone());
+                    true
+                } else {
+                    false
+                }
+            }
             ProtocolMessage::DeleteToken { token_id } => self.tokens.remove(token_id).is_some(),
+            ProtocolMessage::RenameToken { token_id, name } => {
+                if let Some(token) = self.tokens.get_mut(token_id) {
+                    token.name = name.clone();
+                    true
+                } else {
+                    false
+                }
+            }
             ProtocolMessage::PlaceObj(obj) => {
                 let id = format!("{}", self.placed_obj_count);
                 info!("Received place obj message: id {}", id);
@@ -66,28 +95,6 @@ impl GameState {
                     obj.y = *y;
                     obj.width = *w;
                     obj.height = *h;
-                    true
-                } else {
-                    false
-                }
-            }
-            ProtocolMessage::SetController {
-                token_id,
-                new_controller,
-            } => {
-                if let Some(token) = self.tokens.get_mut(token_id) {
-                    token.controller = Some(new_controller.clone());
-                    true
-                } else {
-                    false
-                }
-            }
-            ProtocolMessage::MoveToken {
-                token_id, dx, dy, ..
-            } => {
-                if let Some(token) = self.tokens.get_mut(token_id) {
-                    token.x += *dx;
-                    token.y += *dy;
                     true
                 } else {
                     false

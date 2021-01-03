@@ -14,7 +14,7 @@ pub enum ProtocolMessage {
     },
     RenameToken {
         token_id: String,
-        name: String,
+        name: Option<String>,
     },
     PlaceObj(PlacedObj),
     DeleteObj {

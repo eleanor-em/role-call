@@ -18,12 +18,12 @@ export enum HighlightType {
 }
 
 export function drawToken(ctx: CanvasRenderingContext2D,
-    type: TokenType,
-    x: number,
-    y: number,
-    cellSize: number,
-    colour: string,
-    highlight=HighlightType.None): void {
+                          type: TokenType,
+                          x: number,
+                          y: number,
+                          cellSize: number,
+                          colour: string,
+                          highlight=HighlightType.None): void {
 
     const padding = cellSize * 0.15;
     const radius = (cellSize - 2 * padding) / 2;
@@ -142,21 +142,22 @@ export class TokenManager {
     selectedToken: Token = null;
     deleteButton: PopupButton = null;
     optionButton: PopupButton = null;
+    editButton: PopupButton = null;
     options: Options = null;
 
     forceRender: () => void;
-    setForcePointer: (force: boolean) => void;
+    setForceCursor: (cursor: string) => void;
     players: StoredPlayer[] = [];
 
     // Token ID -> Movement ID -> Movement
     // this exists to make movement feel more responsive to the user
     tentativeMovements: Record<string, Record<string, TentativeMovement>> = {};
 
-    constructor(comms: Comms, renderer: Renderer, forceRender: () => void, setForcePointer: (force: boolean) => void) {
+    constructor(comms: Comms, renderer: Renderer, forceRender: () => void, setForceCursor: (cursor: string) => void) {
         this.comms = comms;
         this.renderer = renderer;
         this.forceRender = forceRender;
-        this.setForcePointer = setForcePointer;
+        this.setForceCursor = setForceCursor;
 
         comms.addPlaceTokenListener('TokenLayerAdd', msg => {
             if (msg.kind != TokenType.None) {
@@ -170,6 +171,7 @@ export class TokenManager {
                 this.selectedToken = null;
                 this.deleteButton = null;
                 this.optionButton = null;
+                this.editButton = null;
             }
 
             delete this.tokens[token_id];
@@ -184,10 +186,15 @@ export class TokenManager {
             // todo: should use tentative structure
             this.deleteButton?.onTokenMove(delta);
             this.optionButton?.onTokenMove(delta);
+            this.editButton?.onTokenMove(delta);
 
             this.tokens[token_id].x += dx;
             this.tokens[token_id].y += dy;
             this.forceRender();
+        });
+
+        comms.addRenameTokenListener('TokenLayerRename', ({ token_id, name }) => {
+            this.tokens[token_id].name = name;
         });
 
         comms.addSetControllerListener('TokenLayerSetCtrl', ({ token_id, new_controller }) => {
@@ -196,10 +203,14 @@ export class TokenManager {
         });
 
         renderer.addRenderListener('TokenManagerRender', (ctx, _) => {
-            setForcePointer(false);
+            setForceCursor('');
             this.hoveredToken = null;
+            this.deleteButton?.setScale(this.renderer.getScale());
             this.deleteButton?.render(ctx);
+            this.optionButton?.setScale(this.renderer.getScale());
             this.optionButton?.render(ctx);
+            this.editButton?.setScale(this.renderer.getScale());
+            this.editButton?.render(ctx);
 
             for (const token_id in this.tokens) {
                 const token = this.tokens[token_id];
@@ -247,7 +258,7 @@ export class TokenManager {
 
                 // draw name if it exists
                 if (token.name) {
-                    ctx.font = "bold 22pt 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif";
+                    ctx.font = "bold 18pt 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif";
                     ctx.textAlign = 'center';
 
                     // Name plate
@@ -288,14 +299,26 @@ export class TokenManager {
         if (this.selectedToken == null) {
             this.deleteButton = null;
             this.optionButton = null;
+            this.editButton = null;
         } else {
             this.deleteButton = new PopupButton(this.selectedToken.x, this.selectedToken.y,
-                this.renderer.cellSize, Anchor.BottomLeft, '\uf014', this.setForcePointer,
+                this.renderer.cellSize, Anchor.BottomLeft, '\uf014', this.setForceCursor,
                 () => this.onDelete());
 
             this.optionButton = new PopupButton(this.selectedToken.x, this.selectedToken.y,
-                this.renderer.cellSize, Anchor.BottomRight, '\uf013', this.setForcePointer,
+                this.renderer.cellSize, Anchor.BottomRight, '\uf013', this.setForceCursor,
                 () => this.onShowOptions());
+
+            this.editButton = new PopupButton(this.selectedToken.x, this.selectedToken.y,
+                this.renderer.cellSize, Anchor.Bottom, '\uf044', this.setForceCursor,
+                () => this.onEditName());
+        }
+    }
+
+    onEditName(): void {
+        if (this.selectedToken) {
+            this.selectedToken.name = prompt('Enter a new name:', this.selectedToken.name || '');
+            this.comms.renameToken(this.selectedToken.id, this.selectedToken.name);
         }
     }
 
@@ -308,7 +331,7 @@ export class TokenManager {
         this.options = null;
 
         // check if we clicked on a button
-        if (this.deleteButton?.onClick() || this.optionButton?.onClick()) {
+        if (this.deleteButton?.onClick() || this.optionButton?.onClick() || this.editButton?.onClick()) {
             return;
         }
 
@@ -333,7 +356,7 @@ export class TokenManager {
         if (this.selectedToken) {
             this.options = new Options(this.selectedToken.x, this.selectedToken.y, this.renderer.cellSize,
                 this.players, new_controller => this.comms.setController(this.selectedToken.id, new_controller),
-                this.setForcePointer);
+                this.setForceCursor);
             this.options.setMouseCoord(this.mouseCoord);
         }
     }
@@ -350,6 +373,7 @@ export class TokenManager {
         this.selectedToken = null;
         this.optionButton = null;
         this.deleteButton = null;
+        this.editButton = null;
         this.options = null;
     }
 
@@ -385,6 +409,7 @@ export class TokenManager {
         const relMouseCoord = this.renderer.transform(rawMouseCoord);
         this.deleteButton?.setMouseCoord(relMouseCoord);
         this.optionButton?.setMouseCoord(relMouseCoord);
+        this.editButton?.setMouseCoord(relMouseCoord);
         this.options?.setMouseCoord(relMouseCoord);
 
         this.mouseCoord = this.renderer.snapToGrid(relMouseCoord);
@@ -406,14 +431,22 @@ class Options {
     hoveredName: string;
     setController: (new_controller: string) => void;
 
-    setForcePointer: (force: boolean) => void;
+    setForceCursor: (cursor: string) => void;
 
     constructor(cellX: number, cellY: number, cellSize: number, players: StoredPlayer[],
-                setController: (new_controller: string) => void, setForcePointer: (force: boolean) => void) {
+                setController: (new_controller: string) => void, setForceCursor: (cursor: string) => void) {
         this.updatePosition(cellX, cellY, cellSize);
         this.players = players;
         this.setController = setController;
-        this.setForcePointer = setForcePointer;
+        this.setForceCursor = setForceCursor;
+        // load the font from the DOM
+        const elem = document.getElementsByTagName('body')[0];
+        const fontParts = window.getComputedStyle(elem, null)
+            .getPropertyValue('font-family')
+            .split(' ');
+        // Extract the family name
+        fontParts.shift();
+        this.font = `20px ${fontParts.join(' ')}`;
     }
 
     updatePosition(cellX: number, cellY: number, cellSize: number) {
@@ -427,14 +460,6 @@ class Options {
     calculateSizes(ctx: CanvasRenderingContext2D) {
         if (this.lineHeight == 0) {
             // hack: height is roughly equal to the width of M
-            // load the font from the DOM
-            const elem = document.getElementsByTagName('body')[0];
-            const fontParts = window.getComputedStyle(elem, null)
-                .getPropertyValue('font-family')
-                .split(' ');
-            // Extract the family name
-            fontParts.shift();
-            this.font = `20px ${fontParts.join(' ')}`;
             ctx.font = this.font;
             // add 1 for border
             this.lineHeight = ctx.measureText('M').width + 1;
@@ -464,7 +489,7 @@ class Options {
             const h = this.lineHeight + this.padding;
 
             if (this.mouseCoord.x > x && this.mouseCoord.x < x + w
-                    && this.mouseCoord.y > y && this.mouseCoord.y < y + h) {
+                && this.mouseCoord.y > y && this.mouseCoord.y < y + h) {
                 this.hoveredName = name;
                 ctx.fillStyle = '#444C7B';
             } else {
@@ -473,13 +498,14 @@ class Options {
             ctx.fillRect(x, y, w, h);
             ctx.strokeRect(x, y, w, h);
 
+            ctx.textAlign = 'left';
             ctx.font = this.font;
             ctx.fillStyle = '#e2cca4';
             ctx.fillText(name, x + this.padding, y + h - this.padding / 2);
         }
 
         if (this.hoveredName) {
-            this.setForcePointer(true);
+            this.setForceCursor('pointer');
         }
     }
 

@@ -29,23 +29,27 @@ function intersectsObj(coord: Point, obj: PlacedObj): boolean {
         && coord.y >= obj.y && coord.y <= obj.y + obj.height;
 }
 
-function drawOutline(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, selected: boolean): void {
+function drawOutline(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number,
+                     selected: boolean, scale: number): void {
     ctx.strokeRect(x, y, width, height);
+
+    scale = Math.min(scale, 1);
     if (selected) {
         // Draw control points
         ctx.fillStyle = 'white';
         ctx.strokeStyle = 'black';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1 / scale;
 
         for (let i = 0; i < 3; ++i) {
             for (let j = 0; j < 3; ++j) {
                 if (i == j && i == 1) {
                     continue;
                 }
+                const size = controlSize / scale;
                 ctx.beginPath();
-                let xx = x + width * (i / 2) - controlSize / 2;
-                let yy = y + height * (j / 2) - controlSize / 2;
-                ctx.rect(xx, yy, controlSize, controlSize);
+                let xx = x + width * (i / 2) - size / 2;
+                let yy = y + height * (j / 2) - size / 2;
+                ctx.rect(xx, yy, size, size);
                 ctx.fill();
                 ctx.stroke();
             }
@@ -174,7 +178,7 @@ export class ObjManager {
 
                     // Draw outline
                     ctx.lineWidth = 2;
-                    if (intersectsObj(this.mouseCoord, obj)) {
+                    if (this.comms.isHost && intersectsObj(this.mouseCoord, obj)) {
                         this.hoveredObj = obj.id;
                         this.hoveredTopLeft = {
                             x: obj.x,
@@ -190,7 +194,8 @@ export class ObjManager {
                     }
 
                     if (draw) {
-                        drawOutline(ctx, obj.x, obj.y, obj.width, obj.height, this.selectedObj == id);
+                        drawOutline(ctx, obj.x, obj.y, obj.width, obj.height, this.selectedObj == id,
+                            this.renderer.getScale());
                     }
 
                     ctx.fillStyle = fillStyle;
@@ -222,6 +227,14 @@ export class ObjManager {
     setMouseCoord(rawMouseCoord: Point): void {
         this.mouseCoord = this.renderer.transform(rawMouseCoord);
         this.deleteButton?.setMouseCoord(this.mouseCoord);
+        this.deleteButton?.setScale(this.renderer.getScale());
+
+        if (this.deleteButton) {
+            const scale = Math.min(1, this.renderer.getScale());
+            const x = this.objs[this.selectedObj].x - 20 / scale;
+            const y = this.objs[this.selectedObj].y - 20 / scale;
+            this.deleteButton.setPosition(x, y);
+        }
 
         // handle dragging
         if (this.draggingDir !== null) {
@@ -356,12 +369,14 @@ export class ObjManager {
                 if (i == 1 && j == 1) {
                     continue;
                 }
-                // recycled from controls drawing
-                let xx = obj.x + obj.width * (i / 2) - controlSize / 2;
-                let yy = obj.y + obj.height * (j / 2) - controlSize / 2;
+                const size = controlSize / Math.min(1, this.renderer.getScale());
 
-                if (this.mouseCoord.x >= xx && this.mouseCoord.x <= xx + controlSize
-                    && this.mouseCoord.y >= yy && this.mouseCoord.y <= yy + controlSize) {
+                // recycled from controls drawing
+                let xx = obj.x + obj.width * (i / 2) - size / 2;
+                let yy = obj.y + obj.height * (j / 2) - size / 2;
+
+                if (this.mouseCoord.x >= xx && this.mouseCoord.x <= xx + size
+                    && this.mouseCoord.y >= yy && this.mouseCoord.y <= yy + size) {
                     return coordsToDragDirection({x: i, y: j});
                 }
             }
@@ -376,6 +391,9 @@ export class ObjManager {
     }
 
     onClick(): void {
+        if (!this.comms.isHost) {
+            return;
+        }
         if (this.deleteButton?.onClick()) {
             return;
         }
@@ -386,7 +404,8 @@ export class ObjManager {
             this.selectedObj = this.hoveredObj;
 
             if (this.selectedObj != prevSelected) {
-                this.deleteButton = new PopupButton(this.hoveredTopLeft.x - 10, this.hoveredTopLeft.y - 10,
+                const scale = Math.min(1, this.renderer.getScale());
+                this.deleteButton = new PopupButton(this.hoveredTopLeft.x - 20 / scale, this.hoveredTopLeft.y - 20 / scale,
                     this.renderer.cellSize, Anchor.TopLeft, '\uf014',
                     force => force ? this.setForceCursor('pointer') : this.setForceCursor(''),
                     () => this.onDelete());
@@ -416,6 +435,13 @@ export class ObjManager {
         }
         this.draggingDir = null;
         this.dragOrigin = null;
+
+        if (this.deleteButton) {
+            const scale = Math.min(1, this.renderer.getScale());
+            const x = this.objs[this.selectedObj].x - 20 / scale;
+            const y = this.objs[this.selectedObj].y - 20 / scale;
+            this.deleteButton.setPosition(x, y);
+        }
     }
 
     onDelete(): void {

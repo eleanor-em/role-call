@@ -20,6 +20,11 @@ export interface MoveTokenMessage {
     dy: number,
 }
 
+export interface RenameTokenMessage {
+    token_id: string,
+    name: string,
+}
+
 export type PlaceObjMessage = PlacedObj;
 
 export interface DeleteObjMessage {
@@ -50,17 +55,13 @@ export interface MoveToken {
     delta: Point,
 }
 
-export interface RenameToken {
-    token_id: string,
-    name: string,
-}
-
 export class Comms {
     socket: W3cWebSocket;
 
     placeTokenListeners: Record<string, (msg: PlaceTokenMessage) => void> = {};
     deleteTokenListeners: Record<string, (msg: DeleteTokenMessage) => void> = {};
     moveTokenListeners: Record<string, (msg: MoveTokenMessage) => void> = {};
+    renameTokenListeners: Record<string, (msg: RenameTokenMessage) => void> = {};
     setControllerListeners: Record<string, (msg: SetControllerMessage) => void> = {};
 
     placeObjListeners: Record<string, (msg: PlaceObjMessage) => void> = {};
@@ -109,6 +110,10 @@ export class Comms {
                 }
                 case 'MoveToken': {
                     Object.values(this.moveTokenListeners).forEach(op => op(data));
+                    break;
+                }
+                case 'RenameToken': {
+                    Object.values(this.renameTokenListeners).forEach(op => op(data));
                     break;
                 }
                 case 'PlaceObj': {
@@ -160,6 +165,18 @@ export class Comms {
         this.socket.send(JSON.stringify({
             DeleteToken: { token_id }
         }));
+    }
+
+    renameToken(token_id: string, name: string): void {
+        if (name) {
+            this.socket.send(JSON.stringify({
+                RenameToken: { token_id, name }
+            }));
+        } else {
+            this.socket.send(JSON.stringify({
+                RenameToken: { token_id }
+            }));
+        }
     }
 
     placeObj(obj_id: number, x: number, y: number, width: number, height: number) {
@@ -216,6 +233,10 @@ export class Comms {
 
     addMoveTokenListener(ref: string, listener: ((msg: MoveTokenMessage) => void)): void {
         this.moveTokenListeners[ref] = listener;
+    }
+
+    addRenameTokenListener(ref: string, listener: ((msg: RenameTokenMessage) => void)): void {
+        this.renameTokenListeners[ref] = listener;
     }
 
     addSetControllerListener(ref: string, listener: ((msg: SetControllerMessage) => void)): void {

@@ -6,52 +6,82 @@ export enum Anchor {
     TopRight,
     BottomLeft,
     BottomRight,
+    Top,
+    Right,
+    Bottom,
+    Left
 }
 
-const iconBackground = '#333333';
-const iconNotHighlighted = '#666666';
-const iconHighlighted = '#aaaaaa';
+const iconBackground = '#444444';
+const iconNotHighlighted = '#999999';
+const iconHighlighted = '#ffffff';
 
 export class PopupButton {
-    radius = 14;
+    defaultRadius = 15;
+    radius = 15;
     offsetX = 6;
     offsetY = 8;
     textWidth = (this.radius * 2) * 0.9;
     bkgOffsetY = 2;
 
+    anchor: Anchor;
+
     x: number;
     y: number;
     content: string;
     hovered = false;
+    cellSize: number;
 
-    setForcePointer: (force: boolean) => void;
+    setForceCursor: (cursor: string) => void;
     handleClickAction: () => void;
 
     constructor(cellX: number, cellY: number, cellSize: number, anchor: Anchor, content: string,
-                setForcePointer: (force: boolean) => void, handleClickAction: () => void) {
+                setForceCursor: (cursor: string) => void, handleClickAction: () => void) {
         this.content = content;
-        this.setForcePointer = setForcePointer;
+        this.setForceCursor = setForceCursor;
         this.handleClickAction = handleClickAction;
+        this.cellSize = cellSize;
+        this.anchor = anchor;
 
-        switch (anchor) {
+        this.setPosition(cellX, cellY);
+    }
+
+    setPosition(cellX: number, cellY: number) {
+        const centreScale = 2;
+        switch (this.anchor) {
             case Anchor.TopLeft:
                 this.x = cellX - this.offsetX;
                 this.y = cellY - this.offsetY;
                 break;
 
             case Anchor.TopRight:
-                this.x = cellX + cellSize + this.offsetX;
+                this.x = cellX + this.cellSize + this.offsetX;
                 this.y = cellY - this.offsetY;
                 break;
 
             case Anchor.BottomLeft:
                 this.x = cellX - this.offsetX;
-                this.y = cellY + cellSize + this.offsetY;
+                this.y = cellY + this.cellSize + this.offsetY;
                 break;
 
             case Anchor.BottomRight:
-                this.x = cellX + cellSize + this.offsetX;
-                this.y = cellY + cellSize + this.offsetY;
+                this.x = cellX + this.cellSize + this.offsetX;
+                this.y = cellY + this.cellSize + this.offsetY;
+                break;
+
+            case Anchor.Top:
+                this.x = cellX + this.cellSize / 2;
+                this.y = cellY - this.offsetY * centreScale;
+                break;
+
+            case Anchor.Right:
+                this.x = cellX + this.cellSize + this.offsetX * centreScale;
+                this.y = cellY + this.cellSize / 2;
+                break;
+
+            case Anchor.Bottom:
+                this.x = cellX + this.cellSize / 2;
+                this.y = cellY + this.cellSize + this.offsetY * centreScale;
                 break;
         }
     }
@@ -81,6 +111,10 @@ export class PopupButton {
         }
     }
 
+    setScale(scale: number) {
+        this.radius = this.defaultRadius / scale;
+    }
+
     render(ctx: CanvasRenderingContext2D): void {
         ctx.fillStyle = iconBackground;
         ctx.beginPath();
@@ -89,12 +123,12 @@ export class PopupButton {
         ctx.fill();
 
         ctx.fillStyle = this.hovered ? iconHighlighted : iconNotHighlighted;
-        ctx.font = `${2 * this.radius}px FontAwesome`;
-        this.textWidth = ctx.measureText(this.content).width;
-        ctx.fillText(this.content, this.x - this.textWidth / 2, this.y + this.textWidth / 2);
+        ctx.font = `${Math.round(1.8 * this.radius)}px FontAwesome`;
+        ctx.textAlign = 'center';
+        ctx.fillText(this.content, this.x, this.y + this.radius * 0.8);
 
         if (this.hovered) {
-            this.setForcePointer(true);
+            this.setForceCursor('pointer');
         }
     }
 }

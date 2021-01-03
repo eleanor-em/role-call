@@ -48,6 +48,10 @@ export class Renderer {
     renderListeners: Record<string, (ctx: CanvasRenderingContext2D, cellSize: number) => void> = {};
     matrix: DOMMatrix = null;
 
+    getScale(): number {
+        return this.matrix ? this.matrix.a : 1;
+    }
+
     transform(point: Point): Point {
         if (this.matrix) {
             const scale = this.matrix.a;
@@ -135,7 +139,6 @@ let objManager: ObjManager = null;
 export function GameStage(props: GameStageProps): React.ReactElement {
     const [hideToken, setHideToken] = useState(false);
     const [cursor, setCursor] = useState('default');
-    const [forcePointer, setForcePointer] = useState(false);
     const [forceCursor, setForceCursor] = useState('');
 
     const [mouseCoord, setMouseCoord] = useState({x: 0, y: 0});
@@ -160,7 +163,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
     }
     if (!loaded && props.comms != null) {
         objManager = new ObjManager(props.comms, renderer, forceRender, setForceCursor);
-        tokenManager = new TokenManager(props.comms, renderer, forceRender, setForcePointer);
+        tokenManager = new TokenManager(props.comms, renderer, forceRender, setForceCursor);
         loaded = true;
     }
     useEffect(() => {
@@ -291,22 +294,30 @@ export function GameStage(props: GameStageProps): React.ReactElement {
 
     function onZoomIn(mouse: Point, scaleFactor: number): void {
         const delta = Math.exp(scaleFactor);
-        setScale(scale * delta);
+        const newScale = scale * delta;
 
-        setTranslation({
-            x: mouse.x - (mouse.x - translation.x) * delta,
-            y: mouse.y - (mouse.y - translation.y) * delta,
-        });
+        if (newScale < 4) {
+            setScale(scale * delta);
+
+            setTranslation({
+                x: mouse.x - (mouse.x - translation.x) * delta,
+                y: mouse.y - (mouse.y - translation.y) * delta,
+            });
+        }
     }
 
     function onZoomOut(mouse: Point, scaleFactor: number): void {
         const delta = 1 / Math.exp(scaleFactor);
-        setScale(scale * delta);
+        const newScale = scale * delta;
 
-        setTranslation({
-            x: mouse.x - (mouse.x - translation.x) * delta,
-            y: mouse.y - (mouse.y - translation.y) * delta
-        });
+        if (newScale > 0.2) {
+            setScale( scale * delta);
+
+            setTranslation({
+                x: mouse.x - (mouse.x - translation.x) * delta,
+                y: mouse.y - (mouse.y - translation.y) * delta
+            });
+        }
     }
 
     function startHideToken(): void {
@@ -470,7 +481,7 @@ export function GameStage(props: GameStageProps): React.ReactElement {
         renderer.render(translation, scale);
     }, [translation, mouseGridCoord, scale, modifiers, forceRenderFlag]);
 
-    let finalCursor = forcePointer ? 'pointer' : cursor;
+    let finalCursor = cursor;
     if (forceCursor.length > 0) {
         finalCursor = forceCursor;
     }
