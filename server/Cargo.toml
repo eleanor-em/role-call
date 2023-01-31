@@ -12,10 +12,17 @@ tokio-postgres = "0.5.4"
 futures = "0.3.5"
 argonautica = "0.2.0"
 # Waiting on Rocket 0.5 support
-rocket = { git = "https://github.com/SergioBenitez/Rocket", branch = "master" }
-rocket_contrib = { git = "https://github.com/SergioBenitez/Rocket", branch = "master" , default-features = false, features = ["json", "serve"] }
-rocket_cors = { git = "https://github.com/lawliet89/rocket_cors", branch = "master" }
-rocket-multipart-form-data = { git = "https://github.com/impero-com/rocket-multipart-form-data", branch = "rocket-0.5" }
+#rocket_http = "0.5.0-alpha.1"
+rocket = { version = "0.5.0-rc.2", features = ["json"] }
+rocket_contrib = { version = "0.4.10", features = ["json"] }
+#rocket = { git = "https://github.com/SergioBenitez/Rocket", branch = "v0.5-rc", features = ["json"] }
+#rocket_contrib = { git = "https://github.com/SergioBenitez/Rocket", branch = "master" , default-features = false, features = ["json", "serve"] }
+#rocket_cors = { git = "https://github.com/lawliet89/rocket_cors", branch = "master" }
+#rocket-multipart-form-data = { git = "https://github.com/impero-com/rocket-multipart-form-data", branch = "rocket-0.5" }
+#rocket = "0.5.0"
+#rocket_contrib = { version = "0.5.0", features = ["json", "serve"] }
+rocket_cors = "0.5.2"
+rocket-multipart-form-data = "0.10.5"
 serde = { version = "1.0.111", features = ["derive"] }
 serde_json = "1.0.53"
 dotenv = "0.15.0"
