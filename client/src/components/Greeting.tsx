@@ -8,8 +8,18 @@ export interface GreetingProps {
 
 export function Greeting(props: GreetingProps): React.ReactElement {
     return (
-        <span className="Greeting">
-            Stay a while and listen{props.user && `, ${stripUserTag(props.user.username)}`}.
+        <div>
+            <span className="Greeting">
+            Stay a while and listen{props.user && `, ${stripUserTag(props.user.username)}`}.<br/>
+            Tip: scroll to zoom, middle click to pan.<br/>
         </span>
+        <span className="Greeting">
+        Test users:
+            <ul>
+                <li>&#123;"email" = "admin", "password" = "password"&#125;</li>
+                <li>&#123;"email" = "player", "password" = "password"&#125;</li>
+            </ul>
+        </span>
+        </div>
     );
 }
