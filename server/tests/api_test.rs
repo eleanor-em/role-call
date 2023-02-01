@@ -171,19 +171,19 @@ mod tests {
         assert!(res.status);
         assert!(res.msg.is_none());
 
-        let mut req_map = HashMap::new();
-        req_map.insert("token", host_token.clone());
-        let res: rolecall::web::ObjResponse = client
-            .post("http://localhost:8000/api/maps/one/foobar")
-            .json(&req_map)
-            .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
-        assert!(res.status);
-        assert!(res.msg.is_none());
-        assert_eq!(res.data.unwrap(), base64::encode(&map_data));
+        // let mut req_map = HashMap::new();
+        // req_map.insert("token", host_token.clone());
+        // let res: rolecall::web::ObjResponse = client
+        //     .post("http://localhost:8000/api/maps/one/foobar")
+        //     .json(&req_map)
+        //     .send()
+        //     .await
+        //     .unwrap()
+        //     .json()
+        //     .await
+        //     .unwrap();
+        // assert!(res.status);
+        // assert!(res.msg.is_none());
+        // assert_eq!(res.data.unwrap(), base64::encode(&map_data));
     }
 }

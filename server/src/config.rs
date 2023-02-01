@@ -61,6 +61,7 @@ fn load_config() -> Config {
     };
 
     SimpleLogger::new()
+        .with_utc_timestamps() // see https://github.com/borntyping/rust-simple_logger/issues/52
         .with_level(
             env::var("RC_LOG_LEVEL")
                 .ok()

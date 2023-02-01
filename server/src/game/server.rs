@@ -22,7 +22,7 @@ lazy_static! {
 
 async fn server_monitor() {
     loop {
-        tokio::time::delay_for(CONFIG.monitor_interval).await;
+        tokio::time::sleep(CONFIG.monitor_interval).await;
         let mut servers = SERVERS.lock().unwrap();
         let mut to_kill = Vec::new();
 
